@@ -8,10 +8,10 @@ setuptools.setup(
     setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
     author="Georg Schramm,",
     author_email="georg.schramm@kuleuven.be",
-    description="CUDA and OPENMP PET projectors with python bindings",
+    description="python bindings for parallelproj CUDA and OPENMP PET projectors",
     license='MIT',
     long_description_content_type="text/markdown",
-    url="https://github.com/gschramm/parallelproj",
+    url="https://github.com/gschramm/pyparallelproj",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
