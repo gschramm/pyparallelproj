@@ -21,7 +21,7 @@ jobs:
       uses: paskino/conda-package-publish-action@v1.4.4
       with:
         subDir: 'recipe'
-        channels: '-c conda-forge -c nvidia'
+        channels: '-c conda-forge -c nvidia -c gschramm'
         AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
         publish: ${{ github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags') }}
         convert_win: false
