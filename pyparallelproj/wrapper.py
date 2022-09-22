@@ -8,7 +8,7 @@ import numpy as np
 try:
     import cupy as cp
 except:
-    import numpy as np
+    import numpy as cp
 
 
 def calc_chunks(nLORs, n_chunks):
@@ -47,13 +47,10 @@ def joseph3d_fwd(xstart,
                  n_chunks=1):
 
     if n_visible_gpus > 0:
-        if isinstance(img, cp.ndarray):
-            ok = joseph3d_fwd_cuda_kernel(
-                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), img.ravel(),
-                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
-                 np.int64(nLORs), cp.asarray(img_dim)))
-        else:
+        # we check whetehr the image to be projected is already on the GPU
+        # (cupy array) or whether it is a numpy host array
+        # in case the arrays are already on teh GPU, we can call the kernel directly
+        if isinstance(img, np.ndarray):
             nvox = ctypes.c_longlong(img_dim[0] * img_dim[1] * img_dim[2])
 
             # send image to all devices
@@ -72,6 +69,12 @@ def joseph3d_fwd(xstart,
 
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(d_img, nvox)
+        else:
+            ok = joseph3d_fwd_cuda_kernel(
+                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
+                (xstart.ravel(), xend.ravel(), img.ravel(),
+                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
+                 np.int64(nLORs), cp.asarray(img_dim)))
     else:
         ok = lib_parallelproj_c.joseph3d_fwd(xstart, xend, img, img_origin,
                                              voxsize, img_fwd, nLORs, img_dim)
@@ -94,13 +97,7 @@ def joseph3d_back(xstart,
                   n_chunks=1):
 
     if n_visible_gpus > 0:
-        if isinstance(sino, cp.ndarray):
-            ok = joseph3d_back_cuda_kernel(
-                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), back_img,
-                 cp.asarray(img_origin), cp.asarray(voxsize), sino.ravel(),
-                 np.int64(nLORs), cp.asarray(img_dim)))
-        else:
+        if isinstance(sino, np.ndarray):
             nvox = ctypes.c_longlong(img_dim[0] * img_dim[1] * img_dim[2])
 
             # send image to all devices
@@ -128,6 +125,12 @@ def joseph3d_back(xstart,
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(
                 d_back_img, nvox)
+        else:
+            ok = joseph3d_back_cuda_kernel(
+                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
+                (xstart.ravel(), xend.ravel(), back_img,
+                 cp.asarray(img_origin), cp.asarray(voxsize), sino.ravel(),
+                 np.int64(nLORs), cp.asarray(img_dim)))
     else:
         ok = lib_parallelproj_c.joseph3d_back(xstart, xend, back_img,
                                               img_origin, voxsize, sino, nLORs,
@@ -160,16 +163,7 @@ def joseph3d_fwd_tof_sino(xstart,
         tofcenter_offset.shape[0] == nLORs)
 
     if n_visible_gpus > 0:
-        if isinstance(img, cp.ndarray):
-            ok = joseph3d_fwd_tof_sino_cuda_kernel(
-                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), img.ravel(),
-                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
-                 np.int64(nLORs), cp.asarray(img_dim), np.int16(ntofbins),
-                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
-                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
-                 lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
-        else:
+        if isinstance(img, np.ndarray):
             nvox = ctypes.c_longlong(img_dim[0] * img_dim[1] * img_dim[2])
 
             # send image to all devices
@@ -206,6 +200,15 @@ def joseph3d_fwd_tof_sino(xstart,
 
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(d_img, nvox)
+        else:
+            ok = joseph3d_fwd_tof_sino_cuda_kernel(
+                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
+                (xstart.ravel(), xend.ravel(), img.ravel(),
+                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
+                 np.int64(nLORs), cp.asarray(img_dim), np.int16(ntofbins),
+                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
+                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
+                 lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
 
     else:
         ok = lib_parallelproj_c.joseph3d_fwd_tof_sino(
@@ -240,16 +243,7 @@ def joseph3d_back_tof_sino(xstart,
         tofcenter_offset.shape[0] == nLORs)
 
     if n_visible_gpus > 0:
-        if isinstance(sino, cp.ndarray):
-            ok = joseph3d_back_tof_sino_cuda_kernel(
-                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), back_img,
-                 cp.asarray(img_origin), cp.asarray(voxsize), sino.ravel(),
-                 np.int64(nLORs), cp.asarray(img_dim), np.int16(ntofbins),
-                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
-                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
-                 lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
-        else:
+        if isinstance(sino, np.ndarray):
             nvox = ctypes.c_longlong(img_dim[0] * img_dim[1] * img_dim[2])
 
             # send image to all devices
@@ -294,6 +288,15 @@ def joseph3d_back_tof_sino(xstart,
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(
                 d_back_img, nvox)
+        else:
+            ok = joseph3d_back_tof_sino_cuda_kernel(
+                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
+                (xstart.ravel(), xend.ravel(), back_img,
+                 cp.asarray(img_origin), cp.asarray(voxsize), sino.ravel(),
+                 np.int64(nLORs), cp.asarray(img_dim), np.int16(ntofbins),
+                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
+                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
+                 lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
     else:
         ok = lib_parallelproj_c.joseph3d_back_tof_sino(
             xstart, xend, back_img, img_origin, voxsize, sino, nLORs, img_dim,
@@ -326,17 +329,7 @@ def joseph3d_fwd_tof_lm(xstart,
     lor_dependent_tofcenter_offset = int(tofcenter_offset.shape[0] == nLORs)
 
     if n_visible_gpus > 0:
-        if isinstance(img, cp.ndarray):
-            ok = joseph3d_fwd_tof_lm_cuda_kernel(
-                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), img.ravel(),
-                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
-                 np.int64(nLORs), cp.asarray(img_dim),
-                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
-                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
-                 tofbin, lor_dependent_sigma_tof,
-                 lor_dependent_tofcenter_offset))
-        else:
+        if isinstance(img, np.ndarray):
             nvox = ctypes.c_longlong(img_dim[0] * img_dim[1] * img_dim[2])
 
             # send image to all devices
@@ -372,6 +365,16 @@ def joseph3d_fwd_tof_lm(xstart,
 
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(d_img, nvox)
+        else:
+            ok = joseph3d_fwd_tof_lm_cuda_kernel(
+                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
+                (xstart.ravel(), xend.ravel(), img.ravel(),
+                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
+                 np.int64(nLORs), cp.asarray(img_dim),
+                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
+                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
+                 tofbin, lor_dependent_sigma_tof,
+                 lor_dependent_tofcenter_offset))
     else:
         ok = lib_parallelproj_c.joseph3d_fwd_tof_lm(
             xstart, xend, img, img_origin, voxsize, img_fwd, nLORs, img_dim,
@@ -404,21 +407,7 @@ def joseph3d_back_tof_lm(xstart,
     lor_dependent_tofcenter_offset = int(tofcenter_offset.shape[0] == nLORs)
 
     if n_visible_gpus > 0:
-        if isinstance(lst, cp.ndarray):
-            lor_dependent_sigma_tof = np.uint8(sigma_tof.shape[0] == nLORs)
-            lor_dependent_tofcenter_offset = np.uint8(
-                tofcenter_offset.shape[0] == nLORs)
-
-            ok = joseph3d_back_tof_lm_cuda_kernel(
-                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), back_img,
-                 cp.asarray(img_origin), cp.asarray(voxsize), lst,
-                 np.int64(nLORs), cp.asarray(img_dim),
-                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
-                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
-                 tofbin, lor_dependent_sigma_tof,
-                 lor_dependent_tofcenter_offset))
-        else:
+        if isinstance(lst, np.ndarray):
             nvox = ctypes.c_longlong(img_dim[0] * img_dim[1] * img_dim[2])
 
             # send image to all devices
@@ -463,6 +452,20 @@ def joseph3d_back_tof_lm(xstart,
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(
                 d_back_img, nvox)
+        else:
+            lor_dependent_sigma_tof = np.uint8(sigma_tof.shape[0] == nLORs)
+            lor_dependent_tofcenter_offset = np.uint8(
+                tofcenter_offset.shape[0] == nLORs)
+
+            ok = joseph3d_back_tof_lm_cuda_kernel(
+                (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
+                (xstart.ravel(), xend.ravel(), back_img,
+                 cp.asarray(img_origin), cp.asarray(voxsize), lst,
+                 np.int64(nLORs), cp.asarray(img_dim),
+                 np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
+                 cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
+                 tofbin, lor_dependent_sigma_tof,
+                 lor_dependent_tofcenter_offset))
     else:
         ok = lib_parallelproj_c.joseph3d_back_tof_lm(
             xstart, xend, back_img, img_origin, voxsize, lst, nLORs, img_dim,
