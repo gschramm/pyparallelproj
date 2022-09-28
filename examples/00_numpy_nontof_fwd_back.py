@@ -49,7 +49,6 @@ if __name__ == "__main__":
     # setup the image origin = the coordinate of the [0,0,0] voxel
     img_origin = (-(np.array(img.shape, dtype=np.float32) / 2) + 0.5) * voxsize
 
-
     # setup the start / end coordinates of the LORs we want to project
     xstart, xend = setup_view_coordimates(nLORs, D, phi)
 
@@ -57,10 +56,8 @@ if __name__ == "__main__":
     img_fwd = np.zeros(nLORs, dtype=np.float32)
 
     # execute the forward projection
-    joseph3d_fwd(xstart, xend, img, img_origin, voxsize, img_fwd, nLORs,
-                 np.array(img.shape, dtype=np.int32))
+    joseph3d_fwd(xstart, xend, img, img_origin, voxsize, img_fwd)
 
     # setup array for back projection
     bimg = np.zeros((n0, n1, n2), dtype=np.float32)
-    joseph3d_back(xstart, xend, bimg.ravel(), img_origin, voxsize, img_fwd,
-                  nLORs, np.array(img.shape, dtype=np.int32))
+    joseph3d_back(xstart, xend, bimg, img_origin, voxsize, img_fwd)

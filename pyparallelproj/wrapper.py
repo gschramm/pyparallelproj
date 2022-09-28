@@ -41,8 +41,6 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
                  img_origin: npt.NDArray | cpt.NDArray,
                  voxsize: npt.NDArray | cpt.NDArray,
                  img_fwd: npt.NDArray | cpt.NDArray,
-                 nLORs: int,
-                 img_dim: npt.NDArray | cpt.NDArray,
                  threadsperblock: int = 64,
                  n_chunks: int = 1) -> None:
     """ 3D non-tof Joseph forward projector
@@ -71,7 +69,7 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
         The start coordinates of the n-th LOR are at xend[n*3 + i] with i = 0,1,2. 
         Units are the ones of voxsize.
     img : npt.NDArray | cpt.NDArray
-        array of shape [n0*n1*n2] containing the 3D image to be projected.
+        array of shape [n0,n1,n2] containing the 3D image to be projected.
         The pixel [i,j,k] ist stored at [n1*n2*i + n2*j + k].
     img_origin : npt.NDArray | cpt.NDArray
         array [x0_0,x0_1,x0_2] of coordinates of the center of the [0,0,0] voxel
@@ -80,15 +78,14 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
         array [vs0, vs1, vs2] of the voxel sizes
     img_fwd : npt.NDArray | cpt.NDArray
         array of length nLORs (output) used to store the projections
-    nLORs : int
-        number of projections (length of img_fwd)
-    img_dim : npt.NDArray | cpt.NDArray
-        array with dimensions of img [n0,n1,n2]
     threadsperblock : int, optional
         threads per block used to launch CUDA kernels, by default 64
     n_chunks : int, optional
         split projection into n_chunks chunks - useful to reduce GPU memory requirement, by default 1
     """
+    img_dim = np.array(img.shape, dtype=np.int32)
+    nLORs = np.int64(img_fwd.size)
+
     if n_visible_gpus > 0:
         # we check whether the image to be projected is already on the GPU
         # (cupy array) or whether it is a numpy host array
@@ -105,9 +102,10 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
 
             for i in range(n_chunks):
                 ok = lib_parallelproj_cuda.joseph3d_fwd_cuda(
-                    xstart[(3 * ic[i]):(3 * ic[i + 1])],
-                    xend[(3 * ic[i]):(3 * ic[i + 1])], d_img, img_origin,
-                    voxsize, img_fwd[ic[i]:ic[i + 1]], ic[i + 1] - ic[i],
+                    xstart.ravel()[(3 * ic[i]):(3 * ic[i + 1])],
+                    xend.ravel()[(3 * ic[i]):(3 * ic[i + 1])], d_img,
+                    img_origin, voxsize,
+                    img_fwd.ravel()[ic[i]:ic[i + 1]], ic[i + 1] - ic[i],
                     img_dim, threadsperblock)
 
             # free image device arrays
@@ -116,11 +114,12 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
             ok = joseph3d_fwd_cuda_kernel(
                 (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
                 (xstart.ravel(), xend.ravel(), img.ravel(),
-                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd,
-                 np.int64(nLORs), cp.asarray(img_dim)))
+                 cp.asarray(img_origin), cp.asarray(voxsize), img_fwd, nLORs,
+                 cp.asarray(img_dim)))
     else:
-        ok = lib_parallelproj_c.joseph3d_fwd(xstart, xend, img, img_origin,
-                                             voxsize, img_fwd, nLORs, img_dim)
+        ok = lib_parallelproj_c.joseph3d_fwd(xstart.ravel(), xend.ravel(),
+                                             img.ravel(), img_origin, voxsize,
+                                             img_fwd.ravel(), nLORs, img_dim)
 
     return ok
 
@@ -131,8 +130,6 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
                   img_origin: npt.NDArray | cpt.NDArray,
                   voxsize: npt.NDArray | cpt.NDArray,
                   sino: npt.NDArray | cpt.NDArray,
-                  nLORs: int,
-                  img_dim: npt.NDArray | cpt.NDArray,
                   threadsperblock: int = 64,
                   n_chunks: int = 1):
     """ 3D non-tof Joseph back projector
@@ -161,7 +158,7 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
         The start coordinates of the n-th LOR are at xend[n*3 + i] with i = 0,1,2. 
         Units are the ones of voxsize.
     back_img : npt.NDArray | cpt.NDArray
-        array of shape [n0*n1*n2] containing the 3D image used to store back projection.
+        array of shape [n0,n1,n2] containing the 3D image used to store back projection.
         The pixel [i,j,k] ist stored at [n1*n2*i + n2*j + k].
     img_origin : npt.NDArray | cpt.NDArray
         array [x0_0,x0_1,x0_2] of coordinates of the center of the [0,0,0] voxel
@@ -170,15 +167,13 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
         array [vs0, vs1, vs2] of the voxel sizes
     sino : npt.NDArray | cpt.NDArray
         array of length nLORs (output) containing the values to be backprojected
-    nLORs : int
-        number of projections (length of sino)
-    img_dim : npt.NDArray | cpt.NDArray
-        array with dimensions of img [n0,n1,n2]
     threadsperblock : int, optional
         threads per block used to launch CUDA kernels, by default 64
     n_chunks : int, optional
         split back projection into n_chunks chunks - useful to reduce GPU memory requirement, by default 1
     """
+    img_dim = np.array(back_img.shape, dtype=np.int32)
+    nLORs = np.int64(sino.size)
 
     if n_visible_gpus > 0:
         if isinstance(sino, np.ndarray):
@@ -186,16 +181,17 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
 
             # send image to all devices
             d_back_img = lib_parallelproj_cuda.copy_float_array_to_all_devices(
-                back_img, nvox)
+                back_img.ravel(), nvox)
 
             # split call to GPU lib into chunks (useful for systems with limited memory)
             ic = calc_chunks(nLORs, n_chunks)
 
             for i in range(n_chunks):
                 ok = lib_parallelproj_cuda.joseph3d_back_cuda(
-                    xstart[(3 * ic[i]):(3 * ic[i + 1])],
-                    xend[(3 * ic[i]):(3 * ic[i + 1])], d_back_img, img_origin,
-                    voxsize, sino[ic[i]:ic[i + 1]], ic[i + 1] - ic[i], img_dim,
+                    xstart.ravel()[(3 * ic[i]):(3 * ic[i + 1])],
+                    xend.ravel()[(3 * ic[i]):(3 * ic[i + 1])], d_back_img,
+                    img_origin, voxsize,
+                    sino.ravel()[ic[i]:ic[i + 1]], ic[i + 1] - ic[i], img_dim,
                     threadsperblock)
 
             # sum all device arrays in the first device
@@ -204,7 +200,7 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
 
             # copy summed image back from first device
             lib_parallelproj_cuda.get_float_array_from_device(
-                d_back_img, nvox, 0, back_img)
+                d_back_img, nvox, 0, back_img.ravel())
 
             # free image device arrays
             lib_parallelproj_cuda.free_float_array_on_all_devices(
@@ -212,12 +208,13 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
         else:
             ok = joseph3d_back_cuda_kernel(
                 (math.ceil(nLORs / threadsperblock), ), (threadsperblock, ),
-                (xstart.ravel(), xend.ravel(), back_img,
+                (xstart.ravel(), xend.ravel(), back_img.ravel(),
                  cp.asarray(img_origin), cp.asarray(voxsize), sino.ravel(),
-                 np.int64(nLORs), cp.asarray(img_dim)))
+                 nLORs, cp.asarray(img_dim)))
     else:
-        ok = lib_parallelproj_c.joseph3d_back(xstart, xend, back_img,
-                                              img_origin, voxsize, sino, nLORs,
+        ok = lib_parallelproj_c.joseph3d_back(xstart.ravel(), xend.ravel(),
+                                              back_img.ravel(), img_origin,
+                                              voxsize, sino.ravel(), nLORs,
                                               img_dim)
 
     return ok
