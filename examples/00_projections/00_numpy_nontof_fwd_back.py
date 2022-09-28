@@ -5,30 +5,7 @@ import numpy.typing as npt
 import matplotlib.pyplot as plt
 from pyparallelproj.wrapper import joseph3d_fwd, joseph3d_back
 
-
-def setup_view_coordinates(num_rad: int,
-                           D: int,
-                           phis: npt.NDArray,
-                           zstart=0,
-                           zend=0) -> tuple[npt.NDArray, npt.NDArray]:
-
-    # setup the start and end coordinates of a single parallel view
-    x0 = np.linspace(-D / 2, D / 2, num_rad, dtype=np.float32)
-    x1 = np.full(num_rad, D / 2, dtype=np.float32)
-
-    xstart = np.zeros((phis.shape[0], 3 * num_rad), dtype=np.float32)
-    xend = np.zeros((phis.shape[0], 3 * num_rad), dtype=np.float32)
-
-    for i, phi in enumerate(phis):
-        xstart[i, 0::3] = np.cos(phi) * x0 - np.sin(phi) * x1
-        xstart[i, 1::3] = np.sin(phi) * x0 + np.cos(phi) * x1
-        xstart[i, 2::3] = zstart
-
-        xend[i, 0::3] = np.cos(phi) * x0 - np.sin(phi) * (-x1)
-        xend[i, 1::3] = np.sin(phi) * x0 + np.cos(phi) * (-x1)
-        xend[i, 2::3] = zend
-
-    return xstart, xend
+from utils import setup_projection_coordinates
 
 
 def main() -> None:
@@ -55,9 +32,12 @@ def main() -> None:
     #  1. in general, the start and end point of the LORs can be anywhere in space
     #  2. the C/CUDA projector libs always 1D input arrays,
     #     so all multidim. arrays get "ravelled / flattened" before calling the C/CUDA functions
-
     phis = np.linspace(0, np.pi, 150, endpoint=False)
-    xstart, xend = setup_view_coordinates(num_rad, D, phis, zstart=0, zend=0)
+    xstart, xend = setup_projection_coordinates(num_rad,
+                                                D,
+                                                phis,
+                                                zstart=0,
+                                                zend=0)
 
     # setup the array for the forward projection
     img_fwd = np.zeros((xstart.shape[0], num_rad), dtype=np.float32)
