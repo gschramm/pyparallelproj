@@ -1,14 +1,17 @@
 import ctypes
-from .config import lib_parallelproj_c, lib_parallelproj_cuda, n_visible_gpus
-from .config import joseph3d_fwd_cuda_kernel, joseph3d_back_cuda_kernel, joseph3d_fwd_tof_sino_cuda_kernel, joseph3d_back_tof_sino_cuda_kernel, joseph3d_fwd_tof_lm_cuda_kernel, joseph3d_back_tof_lm_cuda_kernel
+from pyparallelproj.config import lib_parallelproj_c, lib_parallelproj_cuda, n_visible_gpus
+from pyparallelproj.config import joseph3d_fwd_cuda_kernel, joseph3d_back_cuda_kernel, joseph3d_fwd_tof_sino_cuda_kernel, joseph3d_back_tof_sino_cuda_kernel, joseph3d_fwd_tof_lm_cuda_kernel, joseph3d_back_tof_lm_cuda_kernel
 import math
 
 import numpy as np
+import numpy.typing as npt
 
 try:
     import cupy as cp
+    import cupy.typing as cpt
 except:
     import numpy as cp
+    import numpy.typing as cpt
 
 
 def calc_chunks(nLORs, n_chunks):
@@ -32,22 +35,62 @@ def calc_chunks(nLORs, n_chunks):
     return chunks
 
 
-# ------------------
+def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
+                 xend: npt.NDArray | cpt.NDArray,
+                 img: npt.NDArray | cpt.NDArray,
+                 img_origin: npt.NDArray | cpt.NDArray,
+                 voxsize: npt.NDArray | cpt.NDArray,
+                 img_fwd: npt.NDArray | cpt.NDArray,
+                 nLORs: int,
+                 img_dim: npt.NDArray | cpt.NDArray,
+                 threadsperblock: int = 64,
+                 n_chunks: int = 1) -> None:
+    """ 3D non-tof Joseph forward projector
+
+    Note
+    ----
+    This is a python wrapper for the C/CUDA parallelproj 3D non-tof Joseph forward projector.
+
+    If no CUDA GPU is present, the respective function in the C lib is called.
+
+    If a CUDA GPU is present, and the input arrays are numpy arrays, the respective 
+    function in the CUDA lib is called which includes memory transfer from host to GPU.
+
+    If a CUDA GPU is present, and the input arrays are cupy arrays, the respective 
+    function CUDA kernels are called directly avoiding memory transfer form host to GPU.
 
 
-def joseph3d_fwd(xstart,
-                 xend,
-                 img,
-                 img_origin,
-                 voxsize,
-                 img_fwd,
-                 nLORs,
-                 img_dim,
-                 threadsperblock=64,
-                 n_chunks=1):
-
+    Parameters
+    ----------
+    xstart : npt.NDArray | cpt.NDArray
+        array of shape [3*nLORs] with the coordinates of the start points of the LORs.
+        The start coordinates of the n-th LOR are at xstart[n*3 + i] with i = 0,1,2. 
+        Units are the ones of voxsize.
+    xend : npt.NDArray | cpt.NDArray
+        array of shape [3*nLORs] with the coordinates of the end points of the LORs.
+        The start coordinates of the n-th LOR are at xend[n*3 + i] with i = 0,1,2. 
+        Units are the ones of voxsize.
+    img : npt.NDArray | cpt.NDArray
+        array of shape [n0*n1*n2] containing the 3D image to be projected.
+        The pixel [i,j,k] ist stored at [n1*n2*i + n2*j + k].
+    img_origin : npt.NDArray | cpt.NDArray
+        array [x0_0,x0_1,x0_2] of coordinates of the center of the [0,0,0] voxel
+        Units are the ones of voxsize.
+    voxsize : npt.NDArray | cpt.NDArray
+        array [vs0, vs1, vs2] of the voxel sizes
+    img_fwd : npt.NDArray | cpt.NDArray
+        array of length nLORs (output) used to store the projections
+    nLORs : int
+        number of projections (length of img_fwd)
+    img_dim : npt.NDArray | cpt.NDArray
+        array with dimensions of img [n0,n1,n2]
+    threadsperblock : int, optional
+        threads per block used to launch CUDA kernels, by default 64
+    n_chunks : int, optional
+        split projection into n_chunks chunks - useful to reduce GPU memory requirement, by default 1
+    """
     if n_visible_gpus > 0:
-        # we check whetehr the image to be projected is already on the GPU
+        # we check whether the image to be projected is already on the GPU
         # (cupy array) or whether it is a numpy host array
         # in case the arrays are already on teh GPU, we can call the kernel directly
         if isinstance(img, np.ndarray):
@@ -82,19 +125,60 @@ def joseph3d_fwd(xstart,
     return ok
 
 
-# ------------------
+def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
+                  xend: npt.NDArray | cpt.NDArray,
+                  back_img: npt.NDArray | cpt.NDArray,
+                  img_origin: npt.NDArray | cpt.NDArray,
+                  voxsize: npt.NDArray | cpt.NDArray,
+                  sino: npt.NDArray | cpt.NDArray,
+                  nLORs: int,
+                  img_dim: npt.NDArray | cpt.NDArray,
+                  threadsperblock: int = 64,
+                  n_chunks: int = 1):
+    """ 3D non-tof Joseph back projector
+
+    Note
+    ----
+    This is a python wrapper for the C/CUDA parallelproj 3D non-tof Joseph back projector.
+
+    If no CUDA GPU is present, the respective function in the C lib is called.
+
+    If a CUDA GPU is present, and the input arrays are numpy arrays, the respective 
+    function in the CUDA lib is called which includes memory transfer from host to GPU.
+
+    If a CUDA GPU is present, and the input arrays are cupy arrays, the respective 
+    function CUDA kernels are called directly avoiding memory transfer form host to GPU.
 
 
-def joseph3d_back(xstart,
-                  xend,
-                  back_img,
-                  img_origin,
-                  voxsize,
-                  sino,
-                  nLORs,
-                  img_dim,
-                  threadsperblock=64,
-                  n_chunks=1):
+    Parameters
+    ----------
+    xstart : npt.NDArray | cpt.NDArray
+        array of shape [3*nLORs] with the coordinates of the start points of the LORs.
+        The start coordinates of the n-th LOR are at xstart[n*3 + i] with i = 0,1,2. 
+        Units are the ones of voxsize.
+    xend : npt.NDArray | cpt.NDArray
+        array of shape [3*nLORs] with the coordinates of the end points of the LORs.
+        The start coordinates of the n-th LOR are at xend[n*3 + i] with i = 0,1,2. 
+        Units are the ones of voxsize.
+    back_img : npt.NDArray | cpt.NDArray
+        array of shape [n0*n1*n2] containing the 3D image used to store back projection.
+        The pixel [i,j,k] ist stored at [n1*n2*i + n2*j + k].
+    img_origin : npt.NDArray | cpt.NDArray
+        array [x0_0,x0_1,x0_2] of coordinates of the center of the [0,0,0] voxel
+        Units are the ones of voxsize.
+    voxsize : npt.NDArray | cpt.NDArray
+        array [vs0, vs1, vs2] of the voxel sizes
+    sino : npt.NDArray | cpt.NDArray
+        array of length nLORs (output) containing the values to be backprojected
+    nLORs : int
+        number of projections (length of sino)
+    img_dim : npt.NDArray | cpt.NDArray
+        array with dimensions of img [n0,n1,n2]
+    threadsperblock : int, optional
+        threads per block used to launch CUDA kernels, by default 64
+    n_chunks : int, optional
+        split back projection into n_chunks chunks - useful to reduce GPU memory requirement, by default 1
+    """
 
     if n_visible_gpus > 0:
         if isinstance(sino, np.ndarray):
