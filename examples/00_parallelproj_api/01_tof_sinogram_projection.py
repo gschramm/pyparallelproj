@@ -5,7 +5,7 @@ import numpy.typing as npt
 import matplotlib.pyplot as plt
 from pyparallelproj.wrapper import joseph3d_fwd_tof_sino, joseph3d_back_tof_sino
 
-from utils import setup_projection_coordinates
+from utils import setup_sinogram_projection_coordinates
 
 try:
     import cupy as cp
@@ -15,7 +15,7 @@ except:
     import numpy.typing as cpt
 
 # variable to decide if we want to project numpy arrays (np) or cupy GPU arrays (cp)
-xp = cp
+xp = np
 
 
 def main() -> None:
@@ -44,11 +44,11 @@ def main() -> None:
     #  2. the C/CUDA projector libs always 1D input arrays,
     #     so all multidim. arrays get "ravelled / flattened" before calling the C/CUDA functions
     phis = xp.linspace(0, xp.pi, 150, endpoint=False)
-    xstart, xend = setup_projection_coordinates(num_rad,
-                                                D,
-                                                phis,
-                                                zstart=0,
-                                                zend=0)
+    xstart, xend = setup_sinogram_projection_coordinates(num_rad,
+                                                         D,
+                                                         phis,
+                                                         zstart=0,
+                                                         zend=0)
 
     ntofbins = 27
     tofbin_width = 19.
