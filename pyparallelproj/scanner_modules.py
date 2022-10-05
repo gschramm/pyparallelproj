@@ -1,4 +1,5 @@
 import abc
+import enum
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
@@ -86,6 +87,7 @@ class PETScannerModule(abc.ABC):
                            ax: plt.Axes,
                            annotation_fontsize: float = 0,
                            annotation_prefix: str = '',
+                           annotation_offset: int = 0,
                            transformed: bool = True,
                            **kwargs) -> None:
         """show the LOR coordinates in a 3D scatter plot
@@ -98,6 +100,8 @@ class PETScannerModule(abc.ABC):
             fontsize of LOR endpoint number annotation, by default 0
         annotation_prefix : str, optional
             prefix for annotation, by default ''
+        annotation_offset : int, optional
+            number to add to crystal number, by default 0
         transformed : bool, optional
             use transformed instead of raw coordinates, by default True
         """
@@ -123,7 +127,7 @@ class PETScannerModule(abc.ABC):
                 ax.text(all_lor_endpoints[i, 0],
                         all_lor_endpoints[i, 1],
                         all_lor_endpoints[i, 2],
-                        f'{annotation_prefix}{i}',
+                        f'{annotation_prefix}{i+annotation_offset}',
                         fontsize=annotation_fontsize)
 
 
@@ -272,3 +276,57 @@ class RegularPolygonPETScannerModule(PETScannerModule):
             phi) * self.lor_spacing[0] * tmp
 
         return lor_endpoints
+
+
+class ModularizedPETScanner:
+
+    def __init__(self, modules: tuple[PETScannerModule]) -> None:
+        self._modules = modules
+        self._num_modules = len(self._modules)
+        self._num_lor_endpoints_per_module = np.array(
+            [x.num_lor_endpoints for x in self._modules])
+
+        self._lor_endpoint_index_offset = np.cumsum(
+            np.pad(self._num_lor_endpoints_per_module,
+                   (1, 0)))[:self._num_modules]
+
+        self._lor_endpoints = np.vstack(
+            [x.get_lor_endpoints() for x in self._modules])
+
+    @property
+    def modules(self) -> tuple[PETScannerModule]:
+        return self._modules
+
+    @property
+    def num_modules(self) -> int:
+        return self._num_modules
+
+    @property
+    def num_lor_endpoints_per_module(self) -> npt.NDArray:
+        return self._num_lor_endpoints_per_module
+
+    @property
+    def lor_endpoint_index_offset(self) -> npt.NDArray:
+        return self._lor_endpoint_index_offset
+
+    @property
+    def lor_endpoints(self) -> npt.NDArray:
+        return self._lor_endpoints
+
+    def show_lor_endpoints(self, show_linear_index: bool = True) -> None:
+        fig = plt.figure(figsize=(7, 7))
+        ax = fig.add_subplot(1, 1, 1, projection='3d')
+        for i, module in enumerate(self.modules):
+            if show_linear_index:
+                offset = self.lor_endpoint_index_offset[i]
+                prefix = f''
+            else:
+                offset = 0
+                prefix = f'{i},'
+
+            module.show_lor_endpoints(ax,
+                                      annotation_fontsize=6.,
+                                      annotation_offset=offset,
+                                      annotation_prefix=prefix)
+        fig.tight_layout()
+        fig.show()

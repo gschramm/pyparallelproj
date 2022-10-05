@@ -6,7 +6,7 @@ import pyparallelproj.scanner_modules as pps
 
 radius = 20.
 num_sides = 7
-lor_spacing = (5., 4., 20.)
+lor_spacing = (5., 4.)
 num_lor_endpoints_per_side = 3
 num_rings = 4
 
@@ -22,10 +22,10 @@ for i, phi in enumerate(phis):
     aff_mat = np.eye(4)
     aff_mat[:-1, :-1] = Rotation.from_euler(
         'xyz',
-        [phi, 0, 0],
+        [-phi, 0, 0],
     ).as_matrix()
 
-    aff_mat[1, -1] = -np.sin(phi) * radius
+    aff_mat[1, -1] = np.sin(phi) * radius
     aff_mat[2, -1] = np.cos(phi) * radius
 
     mods.append(
