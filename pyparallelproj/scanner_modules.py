@@ -9,12 +9,19 @@ class PETScannerModule(abc.ABC):
     def __init__(
             self,
             num_lor_endpoints: int,
-            lor_spacing: tuple[float, float, float],
             affine_transformation_matrix: npt.NDArray | None = None) -> None:
+        """abstract base class for PET scanner module
 
+        Parameters
+        ----------
+        num_lor_endpoints : int
+            number of LOR endpoints in the module
+        affine_transformation_matrix : npt.NDArray | None, optional
+            4x4 affine transformation matrix applied to the LOR endpoint coordinates, default None
+            if None, the 4x4 identity matrix is used
+        """
         self._num_lor_endpoints = num_lor_endpoints
         self._lor_endpoint_numbers = np.arange(num_lor_endpoints)
-        self._lor_spacing = lor_spacing
 
         if affine_transformation_matrix is None:
             self._affine_transformation_matrix = np.eye(4)
@@ -30,22 +37,44 @@ class PETScannerModule(abc.ABC):
         return self._lor_endpoint_numbers
 
     @property
-    def lor_spacing(self) -> tuple[float, float, float]:
-        return self._lor_spacing
-
-    @property
     def affine_transformation_matrix(self) -> npt.NDArray:
         return self._affine_transformation_matrix
 
     @abc.abstractmethod
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
+        """mapping from LOR endpoint indicies within module to an array of "raw" world coordinates
+
+        Parameters
+        ----------
+        inds : npt.NDArray | None, optional
+            an non-negative integer array of indices, default None
+            if None means all possible indices [0, ... , num_lor_endpoints - 1]
+
+        Returns
+        -------
+        npt.NDArray
+            a 3 x len(inds) float array with the world coordinates of the LOR endpoints
+        """
         if inds is None:
             inds = self.lor_endpoint_numbers
         raise NotImplementedError
 
     def get_lor_endpoints(self,
                           inds: npt.NDArray | None = None) -> npt.NDArray:
+        """mapping from LOR endpoint indicies within module to an array of "transformed" world coordinates
+
+        Parameters
+        ----------
+        inds : npt.NDArray | None, optional
+            an non-negative integer array of indices, default None
+            if None means all possible indices [0, ... , num_lor_endpoints - 1]
+
+        Returns
+        -------
+        npt.NDArray
+            a 3 x len(inds) float array with the world coordinates of the LOR endpoints including an affine transformation
+        """
 
         raw_lor_endpoints = self.get_raw_lor_endpoints(inds)
 
@@ -57,9 +86,26 @@ class PETScannerModule(abc.ABC):
                            ax: plt.Axes,
                            annotation_fontsize: float = 0,
                            annotation_prefix: str = '',
+                           transformed: bool = True,
                            **kwargs) -> None:
+        """show the LOR coordinates in a 3D scatter plot
 
-        all_lor_endpoints = self.get_lor_endpoints()
+        Parameters
+        ----------
+        ax : plt.Axes
+            3D matplotlib axes
+        annotation_fontsize : float, optional
+            fontsize of LOR endpoint number annotation, by default 0
+        annotation_prefix : str, optional
+            prefix for annotation, by default ''
+        transformed : bool, optional
+            use transformed instead of raw coordinates, by default True
+        """
+
+        if transformed:
+            all_lor_endpoints = self.get_lor_endpoints()
+        else:
+            all_lor_endpoints = self.get_raw_lor_endpoints()
 
         ax.scatter(all_lor_endpoints[:, 0], all_lor_endpoints[:, 1],
                    all_lor_endpoints[:, 2], **kwargs)
@@ -86,16 +132,31 @@ class RectangularPETScannerModule(PETScannerModule):
     def __init__(
             self,
             n: tuple[int, int],
-            lor_spacing: tuple[float, float, float],
+            lor_spacing: tuple[float, float],
             ax0: int = 0,
             ax1: int = 1,
             affine_transformation_matrix: npt.NDArray | None = None) -> None:
+        """rectangular PET scanner module
 
+        Parameters
+        ----------
+        n : tuple[int, int]
+            number of LOR endpoints in the two direction of the module
+        lor_spacing : tuple[float, float]
+            spacing between the LOR endpoints in the two directions
+        ax0 : int, optional
+            axis number for the first direction
+        ax1 : int, optional
+            axis number for the second direction
+        affine_transformation_matrix : npt.NDArray | None, optional
+            4x4 affine transformation matrix applied to the LOR endpoint coordinates, default None
+            if None, the 4x4 identity matrix is used
+        """
         self._n = n
         self._ax0 = ax0
         self._ax1 = ax1
-        super().__init__(n[0] * n[1], lor_spacing,
-                         affine_transformation_matrix)
+        self._lor_spacing = lor_spacing
+        super().__init__(n[0] * n[1], affine_transformation_matrix)
 
     @property
     def n(self) -> tuple[int, int]:
@@ -108,6 +169,10 @@ class RectangularPETScannerModule(PETScannerModule):
     @property
     def ax1(self) -> int:
         return self._ax1
+
+    @property
+    def lor_spacing(self) -> tuple[float, float]:
+        return self._lor_spacing
 
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
@@ -131,17 +196,38 @@ class RegularPolygonPETScannerModule(PETScannerModule):
             radius: float,
             num_sides: int,
             num_lor_endpoints_per_side: int,
-            lor_spacing: tuple[float, float, float],
+            lor_spacing: tuple[float, float],
             ax0: int = 2,
             ax1: int = 1,
             affine_transformation_matrix: npt.NDArray | None = None) -> None:
+        """regular Polygon PET scanner module
+
+        Parameters
+        ----------
+        radius : float
+            inner radius of the regular polygon
+        num_sides: int
+            number of sides of the regular polygon
+        num_lor_endpoints_per_sides: int
+            number of LOR endpoints per side
+        lor_spacing : tuple[float, float]
+            spacing between the LOR endpoints in the two directions
+        ax0 : int, optional
+            axis number for the first direction, by default 2
+        ax1 : int, optional
+            axis number for the second direction, by default 1
+        affine_transformation_matrix : npt.NDArray | None, optional
+            4x4 affine transformation matrix applied to the LOR endpoint coordinates, default None
+            if None, the 4x4 identity matrix is used
+        """
 
         self._radius = radius
         self._num_sides = num_sides
         self._num_lor_endpoints_per_side = num_lor_endpoints_per_side
         self._ax0 = ax0
         self._ax1 = ax1
-        super().__init__(num_sides * num_lor_endpoints_per_side, lor_spacing,
+        self._lor_spacing = lor_spacing
+        super().__init__(num_sides * num_lor_endpoints_per_side,
                          affine_transformation_matrix)
 
     @property
@@ -163,6 +249,10 @@ class RegularPolygonPETScannerModule(PETScannerModule):
     @property
     def ax1(self) -> int:
         return self._ax1
+
+    @property
+    def lor_spacing(self) -> tuple[float, float]:
+        return self._lor_spacing
 
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
