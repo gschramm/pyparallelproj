@@ -11,6 +11,7 @@ class PETScannerModule(abc.ABC):
             num_lor_endpoints: int,
             lor_spacing: tuple[float, float, float],
             affine_transformation_matrix: npt.NDArray | None = None) -> None:
+
         self._num_lor_endpoints = num_lor_endpoints
         self._lor_endpoint_numbers = np.arange(num_lor_endpoints)
         self._lor_spacing = lor_spacing
@@ -19,9 +20,6 @@ class PETScannerModule(abc.ABC):
             self._affine_transformation_matrix = np.eye(4)
         else:
             self._affine_transformation_matrix = affine_transformation_matrix
-
-        self._raw_lor_endpoints = self.get_raw_lor_endpoints()
-        self._all_lor_endpoints = self.get_all_lor_endpoints()
 
     @property
     def num_lor_endpoints(self) -> int:
@@ -39,26 +37,21 @@ class PETScannerModule(abc.ABC):
     def affine_transformation_matrix(self) -> npt.NDArray:
         return self._affine_transformation_matrix
 
-    @property
-    def raw_lor_endpoints(self) -> npt.NDArray:
-        return self._raw_lor_endpoints
-
-    @property
-    def all_lor_endpoints(self) -> npt.NDArray:
-        return self._all_lor_endpoints
-
     @abc.abstractmethod
-    def get_raw_lor_endpoints(self) -> npt.NDArray:
+    def get_raw_lor_endpoints(self,
+                              inds: npt.NDArray | None = None) -> npt.NDArray:
+        if inds is None:
+            inds = self.lor_endpoint_numbers
         raise NotImplementedError
 
-    def get_all_lor_endpoints(self) -> npt.NDArray:
-        return (np.append(self.raw_lor_endpoints,
-                          np.ones((self.num_lor_endpoints, 1)), 1)
-                @ self.affine_transformation_matrix.T)[:, :3]
-
     def get_lor_endpoints(self,
-                          lor_endpoint_numbers: npt.NDArray) -> npt.NDArray:
-        return self.all_lor_endpoints[lor_endpoint_numbers, :]
+                          inds: npt.NDArray | None = None) -> npt.NDArray:
+
+        raw_lor_endpoints = self.get_raw_lor_endpoints(inds)
+
+        return (
+            np.append(raw_lor_endpoints, np.ones((self.num_lor_endpoints, 1)),
+                      1) @ self.affine_transformation_matrix.T)[:, :3]
 
     def show_lor_endpoints(self,
                            ax: plt.Axes,
@@ -66,8 +59,10 @@ class PETScannerModule(abc.ABC):
                            annotation_prefix: str = '',
                            **kwargs) -> None:
 
-        ax.scatter(self.all_lor_endpoints[:, 0], self.all_lor_endpoints[:, 1],
-                   self.all_lor_endpoints[:, 2], **kwargs)
+        all_lor_endpoints = self.get_lor_endpoints()
+
+        ax.scatter(all_lor_endpoints[:, 0], all_lor_endpoints[:, 1],
+                   all_lor_endpoints[:, 2], **kwargs)
 
         ax.set_box_aspect([
             ub - lb for lb, ub in (getattr(ax, f'get_{a}lim')() for a in 'xyz')
@@ -79,9 +74,9 @@ class PETScannerModule(abc.ABC):
 
         if annotation_fontsize > 0:
             for i in self.lor_endpoint_numbers:
-                ax.text(self.all_lor_endpoints[i, 0],
-                        self.all_lor_endpoints[i, 1],
-                        self.all_lor_endpoints[i, 2],
+                ax.text(all_lor_endpoints[i, 0],
+                        all_lor_endpoints[i, 1],
+                        all_lor_endpoints[i, 2],
                         f'{annotation_prefix}{i}',
                         fontsize=annotation_fontsize)
 
@@ -114,15 +109,17 @@ class RectangularPETScannerModule(PETScannerModule):
     def ax1(self) -> int:
         return self._ax1
 
-    def get_raw_lor_endpoints(self) -> npt.NDArray:
-        lor_endpoints = np.zeros((self.num_lor_endpoints, 3))
+    def get_raw_lor_endpoints(self,
+                              inds: npt.NDArray | None = None) -> npt.NDArray:
+        if inds is None:
+            inds = self.lor_endpoint_numbers
 
-        lor_endpoints[:,
-                      self.ax0] = (self.lor_endpoint_numbers % self.n[0] -
-                                   self.n[0] / 2 + 0.5) * self.lor_spacing[0]
-        lor_endpoints[:,
-                      self.ax1] = (self.lor_endpoint_numbers // self.n[0] -
-                                   self.n[1] / 2 + 0.5) * self.lor_spacing[1]
+        lor_endpoints = np.zeros((inds.shape[0], 3))
+
+        lor_endpoints[:, self.ax0] = (inds % self.n[0] - self.n[0] / 2 +
+                                      0.5) * self.lor_spacing[0]
+        lor_endpoints[:, self.ax1] = (inds // self.n[0] - self.n[1] / 2 +
+                                      0.5) * self.lor_spacing[1]
 
         return lor_endpoints
 
@@ -167,9 +164,13 @@ class RegularPolygonPETScannerModule(PETScannerModule):
     def ax1(self) -> int:
         return self._ax1
 
-    def get_raw_lor_endpoints(self) -> npt.NDArray:
-        side = self.lor_endpoint_numbers // self.num_lor_endpoints_per_side
-        tmp = self.lor_endpoint_numbers - side * self.num_lor_endpoints_per_side
+    def get_raw_lor_endpoints(self,
+                              inds: npt.NDArray | None = None) -> npt.NDArray:
+        if inds is None:
+            inds = self.lor_endpoint_numbers
+
+        side = inds // self.num_lor_endpoints_per_side
+        tmp = inds - side * self.num_lor_endpoints_per_side
         tmp = tmp - (self.num_lor_endpoints_per_side / 2 - 0.5)
 
         phi = 2 * np.pi * side / self.num_sides
