@@ -135,11 +135,15 @@ class RegularPolygonPETScannerModule(PETScannerModule):
             num_sides: int,
             num_lor_endpoints_per_side: int,
             lor_spacing: tuple[float, float, float],
+            ax0: int = 2,
+            ax1: int = 1,
             affine_transformation_matrix: npt.NDArray | None = None) -> None:
 
         self._radius = radius
         self._num_sides = num_sides
         self._num_lor_endpoints_per_side = num_lor_endpoints_per_side
+        self._ax0 = ax0
+        self._ax1 = ax1
         super().__init__(num_sides * num_lor_endpoints_per_side, lor_spacing,
                          affine_transformation_matrix)
 
@@ -155,6 +159,14 @@ class RegularPolygonPETScannerModule(PETScannerModule):
     def num_lor_endpoints_per_side(self) -> int:
         return self._num_lor_endpoints_per_side
 
+    @property
+    def ax0(self) -> int:
+        return self._ax0
+
+    @property
+    def ax1(self) -> int:
+        return self._ax1
+
     def get_raw_lor_endpoints(self) -> npt.NDArray:
         side = self.lor_endpoint_numbers // self.num_lor_endpoints_per_side
         tmp = self.lor_endpoint_numbers - side * self.num_lor_endpoints_per_side
@@ -163,9 +175,9 @@ class RegularPolygonPETScannerModule(PETScannerModule):
         phi = 2 * np.pi * side / self.num_sides
 
         lor_endpoints = np.zeros((self.num_lor_endpoints, 3))
-        lor_endpoints[:, 0] = np.cos(phi) * self.radius - np.sin(
+        lor_endpoints[:, self.ax0] = np.cos(phi) * self.radius - np.sin(
             phi) * self.lor_spacing[0] * tmp
-        lor_endpoints[:, 1] = np.sin(phi) * self.radius + np.cos(
+        lor_endpoints[:, self.ax1] = np.sin(phi) * self.radius + np.cos(
             phi) * self.lor_spacing[0] * tmp
 
         return lor_endpoints
