@@ -3,6 +3,7 @@ import enum
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
 class PETScannerModule(abc.ABC):
@@ -285,6 +286,7 @@ class ModularizedPETScanner:
         self._num_modules = len(self._modules)
         self._num_lor_endpoints_per_module = np.array(
             [x.num_lor_endpoints for x in self._modules])
+        self._num_lor_endpoints = self._num_lor_endpoints_per_module.sum()
 
         self._lor_endpoint_index_offset = np.cumsum(
             np.pad(self._num_lor_endpoints_per_module,
@@ -292,6 +294,14 @@ class ModularizedPETScanner:
 
         self._lor_endpoints = np.vstack(
             [x.get_lor_endpoints() for x in self._modules])
+
+        self._lor_endpoint_module_number = np.repeat(
+            np.arange(self._num_modules), self._num_lor_endpoints_per_module)
+
+        # setup the module coicidence matrix that indicates which module are in coincidence which each other
+        self._module_coincidence_matrix = np.ones(
+            (self._num_modules, self._num_modules), dtype=bool)
+        np.fill_diagonal(self._module_coincidence_matrix, False)
 
     @property
     def modules(self) -> tuple[PETScannerModule]:
@@ -306,6 +316,10 @@ class ModularizedPETScanner:
         return self._num_lor_endpoints_per_module
 
     @property
+    def num_lor_endpoints(self) -> int:
+        return self._num_lor_endpoints
+
+    @property
     def lor_endpoint_index_offset(self) -> npt.NDArray:
         return self._lor_endpoint_index_offset
 
@@ -313,9 +327,33 @@ class ModularizedPETScanner:
     def lor_endpoints(self) -> npt.NDArray:
         return self._lor_endpoints
 
-    def show_lor_endpoints(self, show_linear_index: bool = True) -> None:
-        fig = plt.figure(figsize=(7, 7))
-        ax = fig.add_subplot(1, 1, 1, projection='3d')
+    @property
+    def lor_endpoint_module_number(self) -> npt.NDArray:
+        return self._lor_endpoint_module_number
+
+    @property
+    def module_coincidence_matrix(self) -> npt.NDArray:
+        return self._module_coincidence_matrix
+
+    def set_module_coincidence(self, module1: int, module2: int,
+                               value: bool) -> None:
+        self._module_coincidence_matrix[module1, module2] = value
+        self._module_coincidence_matrix[module2, module1] = value
+
+    def linear_lor_endpoint_index(self, module: npt.NDArray,
+                                  index_in_module: npt.NDArray) -> npt.NDArray:
+        return self.lor_endpoint_index_offset[module] + index_in_module
+
+    def get_lor_endpoints_indices_in_coicidence(
+            self, module: int, index_in_module: int) -> npt.NDArray:
+        return np.in1d(
+            self.lor_endpoint_module_number,
+            np.arange(
+                self.num_modules)[self.module_coincidence_matrix[module, :]])
+
+    def show_lor_endpoints(self,
+                           ax: plt.Axes,
+                           show_linear_index: bool = True) -> None:
         for i, module in enumerate(self.modules):
             if show_linear_index:
                 offset = self.lor_endpoint_index_offset[i]
@@ -328,5 +366,24 @@ class ModularizedPETScanner:
                                       annotation_fontsize=6.,
                                       annotation_offset=offset,
                                       annotation_prefix=prefix)
-        fig.tight_layout()
-        fig.show()
+
+    def show_all_lors_for_endpoint(self,
+                                   ax: plt.Axes,
+                                   module: int,
+                                   index_in_module: int,
+                                   lw: float = 0.2,
+                                   **kwargs) -> None:
+
+        # generate all endpoints for which the given start point is in coincidence with
+        coinc_inds = self.get_lor_endpoints_indices_in_coicidence(
+            module, index_in_module)
+        p2s = self.lor_endpoints[coinc_inds, :]
+
+        start = self.lor_endpoints[
+            self.linear_lor_endpoint_index(module, index_in_module), :]
+        p1s = np.repeat([start], p2s.shape[0], 0)
+
+        ls = np.hstack([p1s, p2s]).copy()
+        ls = ls.reshape((-1, 2, 3))
+        lc = Line3DCollection(ls, linewidths=lw, **kwargs)
+        ax.add_collection(lc)

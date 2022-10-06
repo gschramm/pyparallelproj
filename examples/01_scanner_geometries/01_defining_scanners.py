@@ -51,4 +51,16 @@ mods.append(
 mods = tuple(mods)
 
 scanner = pps.ModularizedPETScanner(mods)
-scanner.show_lor_endpoints()
+
+# disable coincidences between modules 2 and 1
+scanner.set_module_coincidence(1, 2, False)
+
+print(scanner.lor_endpoints[scanner.linear_lor_endpoint_index(
+    np.array([1, 4, 3, 7]), np.array([2, 1, 4, 7])), :])
+
+fig = plt.figure(figsize=(7, 7))
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+scanner.show_lor_endpoints(ax, show_linear_index=False)
+scanner.show_all_lors_for_endpoint(ax, 2, 10)
+fig.tight_layout()
+fig.show()
