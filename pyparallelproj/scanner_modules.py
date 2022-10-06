@@ -292,7 +292,7 @@ class ModularizedPETScanner:
             np.pad(self._num_lor_endpoints_per_module,
                    (1, 0)))[:self._num_modules]
 
-        self._lor_endpoints = np.vstack(
+        self._all_lor_endpoints = np.vstack(
             [x.get_lor_endpoints() for x in self._modules])
 
         self._lor_endpoint_module_number = np.repeat(
@@ -324,8 +324,8 @@ class ModularizedPETScanner:
         return self._lor_endpoint_index_offset
 
     @property
-    def lor_endpoints(self) -> npt.NDArray:
-        return self._lor_endpoints
+    def all_lor_endpoints(self) -> npt.NDArray:
+        return self._all_lor_endpoints
 
     @property
     def lor_endpoint_module_number(self) -> npt.NDArray:
@@ -343,6 +343,11 @@ class ModularizedPETScanner:
     def linear_lor_endpoint_index(self, module: npt.NDArray,
                                   index_in_module: npt.NDArray) -> npt.NDArray:
         return self.lor_endpoint_index_offset[module] + index_in_module
+
+    def get_lor_endpoints(self, module: npt.NDArray,
+                          index_in_module: npt.NDArray):
+        return self.all_lor_endpoints[
+            self.linear_lor_endpoint_index(module, index_in_module), :]
 
     def get_lor_endpoints_indices_in_coicidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
@@ -377,11 +382,11 @@ class ModularizedPETScanner:
         # generate all endpoints for which the given start point is in coincidence with
         coinc_inds = self.get_lor_endpoints_indices_in_coicidence(
             module, index_in_module)
-        p2s = self.lor_endpoints[coinc_inds, :]
+        p2s = self.all_lor_endpoints[coinc_inds, :]
 
-        start = self.lor_endpoints[
-            self.linear_lor_endpoint_index(module, index_in_module), :]
-        p1s = np.repeat([start], p2s.shape[0], 0)
+        start = self.all_lor_endpoints[self.linear_lor_endpoint_index(
+            np.array([module]), np.array([index_in_module])), :]
+        p1s = np.repeat(start, p2s.shape[0], 0)
 
         ls = np.hstack([p1s, p2s]).copy()
         ls = ls.reshape((-1, 2, 3))

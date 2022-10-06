@@ -55,7 +55,7 @@ scanner = pps.ModularizedPETScanner(mods)
 # disable coincidences between modules 2 and 1
 scanner.set_module_coincidence(1, 2, False)
 
-print(scanner.lor_endpoints[scanner.linear_lor_endpoint_index(
+print(scanner.all_lor_endpoints[scanner.linear_lor_endpoint_index(
     np.array([1, 4, 3, 7]), np.array([2, 1, 4, 7])), :])
 
 fig = plt.figure(figsize=(7, 7))
