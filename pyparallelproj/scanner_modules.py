@@ -323,7 +323,7 @@ class ModularizedPETScannerGeometry:
 
     @property
     def all_lor_endpoints(self) -> npt.NDArray:
-        raise NotImplementedError
+        return self._all_lor_endpoints
 
     def linear_lor_endpoint_index(self, module: npt.NDArray,
                                   index_in_module: npt.NDArray) -> npt.NDArray:
@@ -446,14 +446,36 @@ class PETCoincidenceDescriptor(abc.ABC):
     def __init__(self, scanner: ModularizedPETScannerGeometry) -> None:
         self._scanner = scanner
 
+    @property
+    def scanner(self) -> ModularizedPETScannerGeometry:
+        return self._scanner
+
     @abc.abstractmethod
     def get_lor_endpoint_indices_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
         raise NotImplementedError
 
-    @property
-    def scanner(self) -> ModularizedPETScannerGeometry:
-        return self._scanner
+    def show_all_lors_for_endpoint(self,
+                                   ax: plt.Axes,
+                                   module: int,
+                                   index_in_module: int,
+                                   lw: float = 0.2,
+                                   **kwargs) -> None:
+
+        # generate all endpoints for which the given start point is in coincidence with
+        coinc_inds = self.get_lor_endpoint_indices_in_coincidence(
+            module, index_in_module)
+        p2s = self.scanner.all_lor_endpoints[coinc_inds, :]
+
+        start = self.scanner.all_lor_endpoints[
+            self.scanner.linear_lor_endpoint_index(np.array(
+                [module]), np.array([index_in_module])), :]
+        p1s = np.repeat(start, p2s.shape[0], 0)
+
+        ls = np.hstack([p1s, p2s]).copy()
+        ls = ls.reshape((-1, 2, 3))
+        lc = Line3DCollection(ls, linewidths=lw, **kwargs)
+        ax.add_collection(lc)
 
 
 class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
