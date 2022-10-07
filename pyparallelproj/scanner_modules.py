@@ -436,8 +436,38 @@ class RegularPolygonPETScanner(ModularizedPETScanner):
                     num_lor_endpoints_per_side=num_lor_endpoints_per_side,
                     lor_spacing=lor_spacing,
                     affine_transformation_matrix=aff_mat,
-                    ax0 = self._ax0,
-                    ax1 = self._ax1))
+                    ax0=self._ax0,
+                    ax1=self._ax1))
 
         modules = tuple(modules)
         super().__init__(modules)
+
+        self._all_lor_endpoints_ring_number = np.arange(
+            self.num_lor_endpoints) // self.num_lor_endpoints_per_module[0]
+
+        self._all_lor_endpoints_index_in_ring = np.arange(
+            self.num_lor_endpoints) % self.num_lor_endpoints_per_module[0]
+
+    @property
+    def radius(self) -> float:
+        return self._radius
+
+    @property
+    def num_sides(self) -> int:
+        return self._num_sides
+
+    @property
+    def num_lor_endpoints_per_side(self) -> int:
+        return self._num_lor_endpoints_per_side
+
+    @property
+    def num_rings(self) -> int:
+        return self._num_rings
+
+    @property
+    def lor_spacing(self) -> float:
+        return self._lor_spacing
+
+    @property
+    def symmetry_axis(self) -> int:
+        return self._symmetry_axis
