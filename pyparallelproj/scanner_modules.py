@@ -201,7 +201,7 @@ class RegularPolygonPETScannerModule(PETScannerModule):
             radius: float,
             num_sides: int,
             num_lor_endpoints_per_side: int,
-            lor_spacing: tuple[float, float],
+            lor_spacing: float,
             ax0: int = 2,
             ax1: int = 1,
             affine_transformation_matrix: npt.NDArray | None = None) -> None:
@@ -215,8 +215,8 @@ class RegularPolygonPETScannerModule(PETScannerModule):
             number of sides of the regular polygon
         num_lor_endpoints_per_sides: int
             number of LOR endpoints per side
-        lor_spacing : tuple[float, float]
-            spacing between the LOR endpoints in the two directions
+        lor_spacing : float
+            spacing between the LOR endpoints in the polygon direction
         ax0 : int, optional
             axis number for the first direction, by default 2
         ax1 : int, optional
@@ -256,7 +256,7 @@ class RegularPolygonPETScannerModule(PETScannerModule):
         return self._ax1
 
     @property
-    def lor_spacing(self) -> tuple[float, float]:
+    def lor_spacing(self) -> float:
         return self._lor_spacing
 
     def get_raw_lor_endpoints(self,
@@ -272,9 +272,9 @@ class RegularPolygonPETScannerModule(PETScannerModule):
 
         lor_endpoints = np.zeros((self.num_lor_endpoints, 3))
         lor_endpoints[:, self.ax0] = np.cos(phi) * self.radius - np.sin(
-            phi) * self.lor_spacing[0] * tmp
+            phi) * self.lor_spacing * tmp
         lor_endpoints[:, self.ax1] = np.sin(phi) * self.radius + np.cos(
-            phi) * self.lor_spacing[0] * tmp
+            phi) * self.lor_spacing * tmp
 
         return lor_endpoints
 
@@ -358,7 +358,8 @@ class ModularizedPETScanner:
 
     def show_lor_endpoints(self,
                            ax: plt.Axes,
-                           show_linear_index: bool = True) -> None:
+                           show_linear_index: bool = True,
+                           **kwargs) -> None:
         for i, module in enumerate(self.modules):
             if show_linear_index:
                 offset = self.lor_endpoint_index_offset[i]
@@ -368,9 +369,9 @@ class ModularizedPETScanner:
                 prefix = f'{i},'
 
             module.show_lor_endpoints(ax,
-                                      annotation_fontsize=6.,
                                       annotation_offset=offset,
-                                      annotation_prefix=prefix)
+                                      annotation_prefix=prefix,
+                                      **kwargs)
 
     def show_all_lors_for_endpoint(self,
                                    ax: plt.Axes,
@@ -392,3 +393,51 @@ class ModularizedPETScanner:
         ls = ls.reshape((-1, 2, 3))
         lc = Line3DCollection(ls, linewidths=lw, **kwargs)
         ax.add_collection(lc)
+
+
+class RegularPolygonPETScanner(ModularizedPETScanner):
+
+    def __init__(self,
+                 radius: float,
+                 num_sides: int,
+                 num_lor_endpoints_per_side: int,
+                 lor_spacing: float,
+                 num_rings: int,
+                 ring_positions: npt.NDArray,
+                 symmetry_axis: int = 0) -> None:
+
+        self._radius = radius
+        self._num_sides = num_sides
+        self._num_lor_endpoints_per_side = num_lor_endpoints_per_side
+        self._num_rings = num_rings
+        self._lor_spacing = lor_spacing
+        self._symmetry_axis = symmetry_axis
+
+        if symmetry_axis == 0:
+            self._ax0 = 2
+            self._ax1 = 1
+        elif symmetry_axis == 1:
+            self._ax0 = 0
+            self._ax1 = 2
+        elif symmetry_axis == 2:
+            self._ax0 = 1
+            self._ax1 = 0
+
+        modules = []
+
+        for ring in range(num_rings):
+            aff_mat = np.eye(4)
+            aff_mat[symmetry_axis, -1] = ring_positions[ring]
+
+            modules.append(
+                RegularPolygonPETScannerModule(
+                    radius,
+                    num_sides,
+                    num_lor_endpoints_per_side=num_lor_endpoints_per_side,
+                    lor_spacing=lor_spacing,
+                    affine_transformation_matrix=aff_mat,
+                    ax0 = self._ax0,
+                    ax1 = self._ax1))
+
+        modules = tuple(modules)
+        super().__init__(modules)
