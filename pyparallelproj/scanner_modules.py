@@ -1,5 +1,4 @@
 import abc
-import enum
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
@@ -279,7 +278,7 @@ class RegularPolygonPETScannerModule(PETScannerModule):
         return lor_endpoints
 
 
-class ModularizedPETScanner:
+class ModularizedPETScannerGeometry:
 
     def __init__(self, modules: tuple[PETScannerModule]) -> None:
         self._modules = modules
@@ -288,20 +287,15 @@ class ModularizedPETScanner:
             [x.num_lor_endpoints for x in self._modules])
         self._num_lor_endpoints = self._num_lor_endpoints_per_module.sum()
 
-        self._lor_endpoint_index_offset = np.cumsum(
+        self._all_lor_endpoints_index_offset = np.cumsum(
             np.pad(self._num_lor_endpoints_per_module,
                    (1, 0)))[:self._num_modules]
 
         self._all_lor_endpoints = np.vstack(
             [x.get_lor_endpoints() for x in self._modules])
 
-        self._lor_endpoint_module_number = np.repeat(
+        self._all_lor_endpoints_module_number = np.repeat(
             np.arange(self._num_modules), self._num_lor_endpoints_per_module)
-
-        # setup the module coicidence matrix that indicates which module are in coincidence which each other
-        self._module_coincidence_matrix = np.ones(
-            (self._num_modules, self._num_modules), dtype=bool)
-        np.fill_diagonal(self._module_coincidence_matrix, False)
 
     @property
     def modules(self) -> tuple[PETScannerModule]:
@@ -320,41 +314,25 @@ class ModularizedPETScanner:
         return self._num_lor_endpoints
 
     @property
-    def lor_endpoint_index_offset(self) -> npt.NDArray:
-        return self._lor_endpoint_index_offset
+    def all_lor_endpoints_index_offset(self) -> npt.NDArray:
+        return self._all_lor_endpoints_index_offset
+
+    @property
+    def all_lor_endpoints_module_number(self) -> npt.NDArray:
+        return self._all_lor_endpoints_module_number
 
     @property
     def all_lor_endpoints(self) -> npt.NDArray:
-        return self._all_lor_endpoints
-
-    @property
-    def lor_endpoint_module_number(self) -> npt.NDArray:
-        return self._lor_endpoint_module_number
-
-    @property
-    def module_coincidence_matrix(self) -> npt.NDArray:
-        return self._module_coincidence_matrix
-
-    def set_module_coincidence(self, module1: int, module2: int,
-                               value: bool) -> None:
-        self._module_coincidence_matrix[module1, module2] = value
-        self._module_coincidence_matrix[module2, module1] = value
+        raise NotImplementedError
 
     def linear_lor_endpoint_index(self, module: npt.NDArray,
                                   index_in_module: npt.NDArray) -> npt.NDArray:
-        return self.lor_endpoint_index_offset[module] + index_in_module
+        return self.all_lor_endpoints_index_offset[module] + index_in_module
 
     def get_lor_endpoints(self, module: npt.NDArray,
-                          index_in_module: npt.NDArray):
+                          index_in_module: npt.NDArray) -> npt.NDArray:
         return self.all_lor_endpoints[
             self.linear_lor_endpoint_index(module, index_in_module), :]
-
-    def get_lor_endpoints_indices_in_coicidence(
-            self, module: int, index_in_module: int) -> npt.NDArray:
-        return np.in1d(
-            self.lor_endpoint_module_number,
-            np.arange(
-                self.num_modules)[self.module_coincidence_matrix[module, :]])
 
     def show_lor_endpoints(self,
                            ax: plt.Axes,
@@ -362,7 +340,7 @@ class ModularizedPETScanner:
                            **kwargs) -> None:
         for i, module in enumerate(self.modules):
             if show_linear_index:
-                offset = self.lor_endpoint_index_offset[i]
+                offset = self.all_lor_endpoints_index_offset[i]
                 prefix = f''
             else:
                 offset = 0
@@ -373,29 +351,8 @@ class ModularizedPETScanner:
                                       annotation_prefix=prefix,
                                       **kwargs)
 
-    def show_all_lors_for_endpoint(self,
-                                   ax: plt.Axes,
-                                   module: int,
-                                   index_in_module: int,
-                                   lw: float = 0.2,
-                                   **kwargs) -> None:
 
-        # generate all endpoints for which the given start point is in coincidence with
-        coinc_inds = self.get_lor_endpoints_indices_in_coicidence(
-            module, index_in_module)
-        p2s = self.all_lor_endpoints[coinc_inds, :]
-
-        start = self.all_lor_endpoints[self.linear_lor_endpoint_index(
-            np.array([module]), np.array([index_in_module])), :]
-        p1s = np.repeat(start, p2s.shape[0], 0)
-
-        ls = np.hstack([p1s, p2s]).copy()
-        ls = ls.reshape((-1, 2, 3))
-        lc = Line3DCollection(ls, linewidths=lw, **kwargs)
-        ax.add_collection(lc)
-
-
-class RegularPolygonPETScanner(ModularizedPETScanner):
+class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
 
     def __init__(self,
                  radius: float,
@@ -442,11 +399,10 @@ class RegularPolygonPETScanner(ModularizedPETScanner):
         modules = tuple(modules)
         super().__init__(modules)
 
-        self._all_lor_endpoints_ring_number = np.arange(
-            self.num_lor_endpoints) // self.num_lor_endpoints_per_module[0]
-
         self._all_lor_endpoints_index_in_ring = np.arange(
-            self.num_lor_endpoints) % self.num_lor_endpoints_per_module[0]
+            self.num_lor_endpoints
+        ) - self.all_lor_endpoints_ring_number * self.num_lor_endpoints_per_module[
+            0]
 
     @property
     def radius(self) -> float:
@@ -471,3 +427,70 @@ class RegularPolygonPETScanner(ModularizedPETScanner):
     @property
     def symmetry_axis(self) -> int:
         return self._symmetry_axis
+
+    @property
+    def all_lor_endpoints_ring_number(self) -> npt.NDArray:
+        return self._all_lor_endpoints_module_number
+
+    @property
+    def all_lor_endpoints_index_in_ring(self) -> npt.NDArray:
+        return self._all_lor_endpoints_index_in_ring
+
+    @property
+    def num_lor_endpoints_per_ring(self) -> int:
+        return self._num_lor_endpoints_per_module[0]
+
+
+class PETCoincidenceDescriptor(abc.ABC):
+
+    def __init__(self, scanner: ModularizedPETScannerGeometry) -> None:
+        self._scanner = scanner
+
+    @abc.abstractmethod
+    def get_lor_endpoint_indices_in_coincidence(
+            self, module: int, index_in_module: int) -> npt.NDArray:
+        raise NotImplementedError
+
+    @property
+    def scanner(self) -> ModularizedPETScannerGeometry:
+        return self._scanner
+
+
+class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
+
+    def __init__(self,
+                 scanner: RegularPolygonPETScannerGeometry,
+                 min_in_ring_difference: int = 0,
+                 max_ring_difference: int | None = None) -> None:
+
+        super().__init__(scanner)
+
+        self._min_in_ring_difference = min_in_ring_difference
+
+        if max_ring_difference is None:
+            self._max_ring_difference = self.scanner.num_rings
+        else:
+            self._max_ring_difference = max_ring_difference
+
+    @property
+    def min_in_ring_difference(self) -> int:
+        return self._min_in_ring_difference
+
+    @property
+    def max_ring_difference(self) -> int:
+        return self._max_ring_difference
+
+    def get_lor_endpoint_indices_in_coincidence(
+            self, module: int, index_in_module: int) -> npt.NDArray:
+        i1 = np.abs(self.scanner.all_lor_endpoints_ring_number -
+                    module) <= self.max_ring_difference
+
+        tmp0 = (index_in_module - self.scanner.all_lor_endpoints_index_in_ring
+                ) % self.scanner.num_lor_endpoints_per_ring
+        tmp1 = (self.scanner.all_lor_endpoints_index_in_ring -
+                index_in_module) % self.scanner.num_lor_endpoints_per_ring
+
+        i2 = np.minimum(tmp0, tmp1) >= self.min_in_ring_difference
+
+        return np.arange(self.scanner.num_lor_endpoints)[np.logical_and(
+            i1, i2)]
