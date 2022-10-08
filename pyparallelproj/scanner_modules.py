@@ -194,6 +194,67 @@ class RectangularPETScannerModule(PETScannerModule):
         return lor_endpoints
 
 
+class RandomizedRectangularPETScannerModule(PETScannerModule):
+
+    def __init__(
+            self,
+            n: tuple[int, int],
+            lor_spacing: tuple[float, float],
+            ax0: int = 0,
+            ax1: int = 1,
+            affine_transformation_matrix: npt.NDArray | None = None) -> None:
+        """rectangular PET scanner module
+
+        Parameters
+        ----------
+        n : tuple[int, int]
+            number of LOR endpoints in the two direction of the module
+        lor_spacing : tuple[float, float]
+            "average" spacing between the LOR endpoints in the two directions
+        ax0 : int, optional
+            axis number for the first direction
+        ax1 : int, optional
+            axis number for the second direction
+        affine_transformation_matrix : npt.NDArray | None, optional
+            4x4 affine transformation matrix applied to the LOR endpoint coordinates, default None
+            if None, the 4x4 identity matrix is used
+        """
+        self._n = n
+        self._ax0 = ax0
+        self._ax1 = ax1
+        self._lor_spacing = lor_spacing
+        super().__init__(n[0] * n[1], affine_transformation_matrix)
+
+        self._raw_lor_endpoints = np.zeros((n[0] * n[1], 3))
+        self._raw_lor_endpoints[:, self.ax0] = (np.random.rand(
+            n[0] * n[1]) - 0.5) * self.n[0] * self.lor_spacing[0]
+        self._raw_lor_endpoints[:, self.ax1] = (np.random.rand(
+            n[0] * n[1]) - 0.5) * self.n[1] * self.lor_spacing[1]
+
+    @property
+    def n(self) -> tuple[int, int]:
+        return self._n
+
+    @property
+    def ax0(self) -> int:
+        return self._ax0
+
+    @property
+    def ax1(self) -> int:
+        return self._ax1
+
+    @property
+    def lor_spacing(self) -> tuple[float, float]:
+        return self._lor_spacing
+
+    def get_raw_lor_endpoints(self,
+                              inds: npt.NDArray | None = None) -> npt.NDArray:
+        if inds is None:
+            inds = self.lor_endpoint_numbers
+
+        return self._raw_lor_endpoints[inds, :]
+
+
 class RegularPolygonPETScannerModule(PETScannerModule):
 
     def __init__(
