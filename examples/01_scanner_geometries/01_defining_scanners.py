@@ -51,9 +51,11 @@ mods.append(
 mods = tuple(mods)
 
 scanner = pps.ModularizedPETScannerGeometry(mods)
+cd = pps.GenericPETCoincidenceDescriptor(scanner)
 
 fig = plt.figure(figsize=(7, 7))
 ax = fig.add_subplot(1, 1, 1, projection='3d')
 scanner.show_lor_endpoints(ax, show_linear_index=False, annotation_fontsize=6)
+cd.show_all_lors_for_endpoint(ax, 1, 1)
 fig.tight_layout()
 fig.show()

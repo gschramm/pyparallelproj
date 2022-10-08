@@ -1,4 +1,5 @@
 import abc
+import itertools
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
@@ -451,8 +452,11 @@ class PETCoincidenceDescriptor(abc.ABC):
         return self._scanner
 
     @abc.abstractmethod
-    def get_lor_endpoint_indices_in_coincidence(
+    def get_modules_and_indicies_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
+        """ return (N,2) array of two integers showing which module/index_in_module combinations
+            are in coincidence with the given input module / index_in_module
+        """
         raise NotImplementedError
 
     def show_all_lors_for_endpoint(self,
@@ -462,9 +466,10 @@ class PETCoincidenceDescriptor(abc.ABC):
                                    lw: float = 0.2,
                                    **kwargs) -> None:
 
-        # generate all endpoints for which the given start point is in coincidence with
-        coinc_inds = self.get_lor_endpoint_indices_in_coincidence(
+        tmp = self.get_modules_and_indicies_in_coincidence(
             module, index_in_module)
+        coinc_inds = self.scanner.linear_lor_endpoint_index(
+            tmp[:, 0], tmp[:, 1])
         p2s = self.scanner.all_lor_endpoints[coinc_inds, :]
 
         start = self.scanner.all_lor_endpoints[
@@ -476,6 +481,31 @@ class PETCoincidenceDescriptor(abc.ABC):
         ls = ls.reshape((-1, 2, 3))
         lc = Line3DCollection(ls, linewidths=lw, **kwargs)
         ax.add_collection(lc)
+
+
+class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
+    """ generic coincidence logic where a LOR endpoint in a module is connected to all
+        all LOR endpoints of all other modules
+    """
+
+    def __init__(self, scanner: ModularizedPETScannerGeometry):
+
+        super().__init__(scanner)
+
+    def get_modules_and_indicies_in_coincidence(
+            self, module: int, index_in_module: int) -> npt.NDArray:
+
+        modules = []
+        indices = []
+
+        for i, num_modules in enumerate(
+                self.scanner.num_lor_endpoints_per_module):
+
+            if i != module:
+                modules += num_modules * [i]
+                indices += range(num_modules)
+
+        return np.array([modules, indices]).T
 
 
 class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
@@ -502,17 +532,31 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def max_ring_difference(self) -> int:
         return self._max_ring_difference
 
-    def get_lor_endpoint_indices_in_coincidence(
-            self, module: int, index_in_module: int) -> npt.NDArray:
-        i1 = np.abs(self.scanner.all_lor_endpoints_ring_number -
-                    module) <= self.max_ring_difference
+    def get_modules_in_coincidence(self, module: int) -> npt.NDArray:
 
-        tmp0 = (index_in_module - self.scanner.all_lor_endpoints_index_in_ring
-                ) % self.scanner.num_lor_endpoints_per_ring
-        tmp1 = (self.scanner.all_lor_endpoints_index_in_ring -
+        ring_numbers = np.arange(self.scanner.num_rings)
+        i1 = np.abs(ring_numbers - module) <= self.max_ring_difference
+
+        return ring_numbers[i1]
+
+    def get_indicies_in_module_in_coincidence(
+            self, index_in_module: int) -> npt.NDArray:
+
+        module_indices = np.arange(self.scanner.num_lor_endpoints_per_ring)
+
+        tmp0 = (index_in_module -
+                module_indices) % self.scanner.num_lor_endpoints_per_ring
+        tmp1 = (module_indices -
                 index_in_module) % self.scanner.num_lor_endpoints_per_ring
-
         i2 = np.minimum(tmp0, tmp1) >= self.min_in_ring_difference
 
-        return np.arange(self.scanner.num_lor_endpoints)[np.logical_and(
-            i1, i2)]
+        return module_indices[i2]
+
+    def get_modules_and_indicies_in_coincidence(
+            self, module: int, index_in_module: int) -> npt.NDArray:
+        return np.array(
+            list(
+                itertools.product(
+                    self.get_modules_in_coincidence(module),
+                    self.get_indicies_in_module_in_coincidence(
+                        index_in_module))))
