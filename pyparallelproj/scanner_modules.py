@@ -45,7 +45,7 @@ class PETScannerModule(abc.ABC):
     @abc.abstractmethod
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
-        """mapping from LOR endpoint indicies within module to an array of "raw" world coordinates
+        """mapping from LOR endpoint indices within module to an array of "raw" world coordinates
 
         Parameters
         ----------
@@ -64,7 +64,7 @@ class PETScannerModule(abc.ABC):
 
     def get_lor_endpoints(self,
                           inds: npt.NDArray | None = None) -> npt.NDArray:
-        """mapping from LOR endpoint indicies within module to an array of "transformed" world coordinates
+        """mapping from LOR endpoint indices within module to an array of "transformed" world coordinates
 
         Parameters
         ----------
@@ -507,16 +507,28 @@ class PETCoincidenceDescriptor(abc.ABC):
 
     def __init__(self, scanner: ModularizedPETScannerGeometry) -> None:
         self._scanner = scanner
+        self._lor_start_module_index = None
+        self._lor_end_module_index = None
 
     @property
     def scanner(self) -> ModularizedPETScannerGeometry:
         return self._scanner
 
     @abc.abstractmethod
-    def get_modules_and_indicies_in_coincidence(
+    def get_modules_and_indices_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
         """ return (N,2) array of two integers showing which module/index_in_module combinations
             are in coincidence with the given input module / index_in_module
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_lor_indices(
+        self,
+        linear_lor_indices: None | npt.NDArray = None
+    ) -> tuple[npt.NDArray, npt.NDArray]:
+        """ mapping that maps the linear LOR index to the index pair (module, lor endpoint in module)
+            for start and endpoint of LORs
         """
         raise NotImplementedError
 
@@ -527,7 +539,7 @@ class PETCoincidenceDescriptor(abc.ABC):
                                    lw: float = 0.2,
                                    **kwargs) -> None:
 
-        tmp = self.get_modules_and_indicies_in_coincidence(
+        tmp = self.get_modules_and_indices_in_coincidence(
             module, index_in_module)
         coinc_inds = self.scanner.linear_lor_endpoint_index(
             tmp[:, 0], tmp[:, 1])
@@ -543,6 +555,19 @@ class PETCoincidenceDescriptor(abc.ABC):
         lc = Line3DCollection(ls, linewidths=lw, **kwargs)
         ax.add_collection(lc)
 
+    def show_all_lors(self, ax: plt.Axes, lw: float = 0.2, **kwargs) -> None:
+
+        start_inds, end_inds = self.get_lor_indices()
+
+        p1s = self.scanner.get_lor_endpoints(start_inds[:, 0], start_inds[:,
+                                                                          1])
+        p2s = self.scanner.get_lor_endpoints(end_inds[:, 0], end_inds[:, 1])
+
+        ls = np.hstack([p1s, p2s]).copy()
+        ls = ls.reshape((-1, 2, 3))
+        lc = Line3DCollection(ls, linewidths=lw, **kwargs)
+        ax.add_collection(lc)
+
 
 class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     """ generic coincidence logic where a LOR endpoint in a module is connected to all
@@ -552,8 +577,23 @@ class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def __init__(self, scanner: ModularizedPETScannerGeometry):
 
         super().__init__(scanner)
+        self.setup_lor_lookup_table()
 
-    def get_modules_and_indicies_in_coincidence(
+    @property
+    def num_lors(self):
+        return self._lor_start_module_index.shape[0]
+
+    def get_lor_indices(
+        self,
+        linear_lor_indices: None | npt.NDArray = None
+    ) -> tuple[npt.NDArray, npt.NDArray]:
+        if linear_lor_indices is None:
+            linear_lor_indices = np.arange(self.num_lors)
+
+        return self._lor_start_module_index[
+            linear_lor_indices], self._lor_end_module_index[linear_lor_indices]
+
+    def get_modules_and_indices_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
 
         modules = []
@@ -567,6 +607,30 @@ class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
                 indices += range(num_modules)
 
         return np.array([modules, indices]).T
+
+    def setup_lor_lookup_table(self) -> None:
+        for mod, num_lor_endpoints in enumerate(
+                self.scanner.num_lor_endpoints_per_module):
+            for lor in range(num_lor_endpoints):
+
+                tmp = self.get_modules_and_indices_in_coincidence(mod, lor)
+                # make sure we do not LORs twice
+                tmp = tmp[tmp[:, 0] >= mod]
+
+                if mod == 0 and lor == 0:
+                    self._lor_start_module_index = np.repeat(np.array(
+                        [[mod, lor]], dtype=np.uint16),
+                                                             tmp.shape[0],
+                                                             axis=0)
+                    self._lor_end_module_index = tmp.copy().astype(np.uint16)
+                else:
+                    self._lor_start_module_index = np.vstack(
+                        (self._lor_start_module_index,
+                         np.repeat(np.array([[mod, lor]]),
+                                   tmp.shape[0],
+                                   axis=0)))
+                    self._lor_end_module_index = np.vstack(
+                        (self._lor_end_module_index, tmp))
 
 
 class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
@@ -600,7 +664,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
         return ring_numbers[i1]
 
-    def get_indicies_in_module_in_coincidence(
+    def get_indices_in_module_in_coincidence(
             self, index_in_module: int) -> npt.NDArray:
 
         module_indices = np.arange(self.scanner.num_lor_endpoints_per_ring)
@@ -613,11 +677,11 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
         return module_indices[i2]
 
-    def get_modules_and_indicies_in_coincidence(
+    def get_modules_and_indices_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
         return np.array(
             list(
                 itertools.product(
                     self.get_modules_in_coincidence(module),
-                    self.get_indicies_in_module_in_coincidence(
+                    self.get_indices_in_module_in_coincidence(
                         index_in_module))))
