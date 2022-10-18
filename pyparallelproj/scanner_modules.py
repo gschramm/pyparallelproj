@@ -1,5 +1,5 @@
 #TODO: - split return of get_lor_indices() in 4 1D arrays
-#      - enum for sinogram axis order
+#      - enum for sinogram axis order + pass it to constructor
 import abc
 import itertools
 import numpy as np
@@ -514,7 +514,6 @@ class PETCoincidenceDescriptor(abc.ABC):
     def scanner(self) -> ModularizedPETScannerGeometry:
         return self._scanner
 
-
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
     # abstract methods
@@ -574,8 +573,8 @@ class PETCoincidenceDescriptor(abc.ABC):
         tmp = self.get_modules_and_indices_in_coincidence(
             module, index_in_module)
 
-        end_mod = tmp[:,0]
-        end_ind = tmp[:,1]
+        end_mod = tmp[:, 0]
+        end_ind = tmp[:, 1]
 
         start_mod = np.full(end_mod.shape[0], module)
         start_ind = np.full(end_mod.shape[0], index_in_module)
@@ -720,7 +719,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def get_lor_indices(
         self,
         linear_lor_indices: None | npt.NDArray = None
-    ) -> tuple[npt.NDArray, npt.NDArray]:
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
 
         if linear_lor_indices is None:
             linear_lor_indices = np.arange(self.num_lors)
@@ -750,10 +749,12 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def get_indices_in_module_in_coincidence(
             self, index_in_module: int) -> npt.NDArray:
 
-        tmp0 = self.end_in_ring_index[self.start_in_ring_index == index_in_module]
-        tmp1 = self.start_in_ring_index[self.end_in_ring_index == index_in_module]
+        tmp0 = self.end_in_ring_index[self.start_in_ring_index ==
+                                      index_in_module]
+        tmp1 = self.start_in_ring_index[self.end_in_ring_index ==
+                                        index_in_module]
 
-        indices_in_coinc = np.concatenate((tmp0,tmp1))
+        indices_in_coinc = np.concatenate((tmp0, tmp1))
         indices_in_coinc.sort()
 
         return indices_in_coinc
