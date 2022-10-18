@@ -514,6 +514,11 @@ class PETCoincidenceDescriptor(abc.ABC):
     def scanner(self) -> ModularizedPETScannerGeometry:
         return self._scanner
 
+
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+    # abstract methods
+
     @abc.abstractmethod
     def get_modules_and_indices_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
@@ -526,11 +531,15 @@ class PETCoincidenceDescriptor(abc.ABC):
     def get_lor_indices(
         self,
         linear_lor_indices: None | npt.NDArray = None
-    ) -> tuple[npt.NDArray, npt.NDArray]:
-        """ mapping that maps the linear LOR index to the index pair (module, lor endpoint in module)
-            for start and endpoint of LORs
+    ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
+        """ mapping that maps the linear LOR index to the 4 1D arrays
+            representing start_module, start_index_in_module, end_module,
+            end_index_in_module
         """
         raise NotImplementedError
+
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
 
     def setup_lor_lookup_table(self) -> None:
         for mod, num_lor_endpoints in enumerate(
@@ -564,14 +573,15 @@ class PETCoincidenceDescriptor(abc.ABC):
 
         tmp = self.get_modules_and_indices_in_coincidence(
             module, index_in_module)
-        coinc_inds = self.scanner.linear_lor_endpoint_index(
-            tmp[:, 0], tmp[:, 1])
-        p2s = self.scanner.all_lor_endpoints[coinc_inds, :]
 
-        start = self.scanner.all_lor_endpoints[
-            self.scanner.linear_lor_endpoint_index(np.array(
-                [module]), np.array([index_in_module])), :]
-        p1s = np.repeat(start, p2s.shape[0], 0)
+        end_mod = tmp[:,0]
+        end_ind = tmp[:,1]
+
+        start_mod = np.full(end_mod.shape[0], module)
+        start_ind = np.full(end_mod.shape[0], index_in_module)
+
+        p1s = self.scanner.get_lor_endpoints(start_mod, start_ind)
+        p2s = self.scanner.get_lor_endpoints(end_mod, end_ind)
 
         ls = np.hstack([p1s, p2s]).copy()
         ls = ls.reshape((-1, 2, 3))
@@ -580,11 +590,10 @@ class PETCoincidenceDescriptor(abc.ABC):
 
     def show_all_lors(self, ax: plt.Axes, lw: float = 0.2, **kwargs) -> None:
 
-        start_inds, end_inds = self.get_lor_indices()
+        start_mod, start_ind, end_mod, end_ind = self.get_lor_indices()
 
-        p1s = self.scanner.get_lor_endpoints(start_inds[:, 0], start_inds[:,
-                                                                          1])
-        p2s = self.scanner.get_lor_endpoints(end_inds[:, 0], end_inds[:, 1])
+        p1s = self.scanner.get_lor_endpoints(start_mod, start_ind)
+        p2s = self.scanner.get_lor_endpoints(end_mod, end_ind)
 
         ls = np.hstack([p1s, p2s]).copy()
         ls = ls.reshape((-1, 2, 3))
@@ -695,6 +704,19 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def end_in_ring_index(self) -> npt.NDArray:
         return self._end_in_ring_index
 
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+    # abstract methods from the base class that we have to implement
+
+    def get_modules_and_indices_in_coincidence(
+            self, module: int, index_in_module: int) -> npt.NDArray:
+        return np.array(
+            list(
+                itertools.product(
+                    self.get_modules_in_coincidence(module),
+                    self.get_indices_in_module_in_coincidence(
+                        index_in_module))))
+
     def get_lor_indices(
         self,
         linear_lor_indices: None | npt.NDArray = None
@@ -713,8 +735,10 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         start_inds = self.start_in_ring_index[views, radial_elements]
         end_inds = self.end_in_ring_index[views, radial_elements]
 
-        return np.vstack((start_ring, start_inds)).T, np.vstack(
-            (end_ring, end_inds)).T
+        return start_ring, start_inds, end_ring, end_inds
+
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
 
     def get_modules_in_coincidence(self, module: int) -> npt.NDArray:
 
@@ -726,24 +750,13 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def get_indices_in_module_in_coincidence(
             self, index_in_module: int) -> npt.NDArray:
 
-        module_indices = np.arange(self.scanner.num_lor_endpoints_per_ring)
+        tmp0 = self.end_in_ring_index[self.start_in_ring_index == index_in_module]
+        tmp1 = self.start_in_ring_index[self.end_in_ring_index == index_in_module]
 
-        tmp0 = (index_in_module -
-                module_indices) % self.scanner.num_lor_endpoints_per_ring
-        tmp1 = (module_indices -
-                index_in_module) % self.scanner.num_lor_endpoints_per_ring
-        i2 = np.minimum(tmp0, tmp1) >= self.min_in_ring_difference
+        indices_in_coinc = np.concatenate((tmp0,tmp1))
+        indices_in_coinc.sort()
 
-        return module_indices[i2]
-
-    def get_modules_and_indices_in_coincidence(
-            self, module: int, index_in_module: int) -> npt.NDArray:
-        return np.array(
-            list(
-                itertools.product(
-                    self.get_modules_in_coincidence(module),
-                    self.get_indices_in_module_in_coincidence(
-                        index_in_module))))
+        return indices_in_coinc
 
     def setup_plane_indices(self) -> None:
         self._start_plane_index = np.arange(self.scanner.num_rings)

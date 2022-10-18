@@ -35,5 +35,8 @@ scanner.show_lor_endpoints(ax,
                            annotation_fontsize=0,
                            s=1)
 cd.show_view(ax, 0, num_rings // 2)
+cd.show_view(ax, 7, num_rings // 2)
+#cd.show_all_lors(ax)
+#cd.show_all_lors_for_endpoint(ax, 1, 2)
 fig.tight_layout()
 fig.show()
