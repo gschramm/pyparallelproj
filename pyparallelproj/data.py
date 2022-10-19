@@ -186,6 +186,25 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         self.setup_plane_indices()
         self.setup_view_indices()
 
+        if self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RVP:
+            self._sinogram_spatial_shape = (self.num_rad, self.num_views,
+                                            self.num_planes)
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RPV:
+            self._sinogram_spatial_shape = (self.num_rad, self.num_planes,
+                                            self.num_views)
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VRP:
+            self._sinogram_spatial_shape = (self.num_views, self.num_rad,
+                                            self.num_planes)
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VPR:
+            self._sinogram_spatial_shape = (self.num_views, self.num_planes,
+                                            self.num_rad)
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PVR:
+            self._sinogram_spatial_shape = (self.num_planes, self.num_views,
+                                            self.num_rad)
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PRV:
+            self._sinogram_spatial_shape = (self.num_planes, self.num_rad,
+                                            self.num_views)
+
     @property
     def radial_trim(self) -> int:
         return self._radial_trim
@@ -230,6 +249,10 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def sinogram_spatial_axis_order(self) -> SinogramSpatialAxisOrder:
         return self._sinogram_spatial_axis_order
 
+    @property
+    def sinogram_spatial_shape(self) -> tuple[int, int, int]:
+        return self._sinogram_spatial_shape
+
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
     # abstract methods from the base class that we have to implement
@@ -253,28 +276,22 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
         if self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RVP:
             radial_elements, views, planes = np.unravel_index(
-                linear_lor_indices,
-                (self.num_rad, self.num_views, self.num_planes))
+                linear_lor_indices, self.sinogram_spatial_shape)
         elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RPV:
             radial_elements, planes, views = np.unravel_index(
-                linear_lor_indices,
-                (self.num_rad, self.num_planes, self.num_views))
+                linear_lor_indices, self.sinogram_spatial_shape)
         elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VRP:
             views, radial_elements, planes = np.unravel_index(
-                linear_lor_indices,
-                (self.num_views, self.num_rad, self.num_planes))
+                linear_lor_indices, self.sinogram_spatial_shape)
         elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VPR:
             views, planes, radial_elements = np.unravel_index(
-                linear_lor_indices,
-                (self.num_views, self.num_planes, self.num_rad))
+                linear_lor_indices, self.sinogram_spatial_shape)
         elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PVR:
             planes, views, radial_elements = np.unravel_index(
-                linear_lor_indices,
-                (self.num_planes, self.num_views, self.num_rad))
+                linear_lor_indices, self.sinogram_spatial_shape)
         elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PRV:
             planes, radial_elements, views = np.unravel_index(
-                linear_lor_indices,
-                (self.num_planes, self.num_rad, self.num_views))
+                linear_lor_indices, self.sinogram_spatial_shape)
 
         start_ring = self.start_plane_index[planes]
         end_ring = self.end_plane_index[planes]
