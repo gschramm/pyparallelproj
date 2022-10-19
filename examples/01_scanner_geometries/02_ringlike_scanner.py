@@ -4,15 +4,16 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
 
 import pyparallelproj.scanner_modules as pps
+import pyparallelproj.data as ppd
 
 radius = 50
-num_sides = 7
+num_sides = 15
 num_lor_endpoints_per_side = 4
 lor_spacing = 4.
 num_rings = 3
 
 max_ring_difference = 1
-radial_trim = 5
+radial_trim = 10
 
 ring_positions = 1.1 * lor_spacing * np.arange(num_rings)
 
@@ -25,7 +26,7 @@ scanner = pps.RegularPolygonPETScannerGeometry(radius,
                                                symmetry_axis=0)
 
 # setupt the coincidence descriptor
-cd = pps.RegularPolygonPETCoincidenceDescriptor(
+cd = ppd.RegularPolygonPETCoincidenceDescriptor(
     scanner, radial_trim=radial_trim, max_ring_difference=max_ring_difference)
 
 fig = plt.figure(figsize=(7, 7))
@@ -35,8 +36,6 @@ scanner.show_lor_endpoints(ax,
                            annotation_fontsize=0,
                            s=1)
 cd.show_view(ax, 0, num_rings // 2)
-cd.show_view(ax, 7, num_rings // 2)
-#cd.show_all_lors(ax)
-#cd.show_all_lors_for_endpoint(ax, 1, 2)
+cd.show_view(ax, cd.num_views // 2, num_rings // 2, color='r')
 fig.tight_layout()
 fig.show()
