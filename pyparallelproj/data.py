@@ -1,4 +1,6 @@
 import abc
+import enum
+
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
@@ -7,9 +9,20 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 import pyparallelproj.scanner_modules as scanners
 
 
+class SinogramSpatialAxisOrder(enum.Enum):
+    """order of spatial axis in a sinogram R (radial), V (view), P (plane)"""
+    RVP = enum.auto()
+    RPV = enum.auto()
+    VRP = enum.auto()
+    VPR = enum.auto()
+    PRV = enum.auto()
+    PVR = enum.auto()
+
+
 class PETCoincidenceDescriptor(abc.ABC):
 
-    def __init__(self, scanner: scanners.ModularizedPETScannerGeometry) -> None:
+    def __init__(self,
+                 scanner: scanners.ModularizedPETScannerGeometry) -> None:
         self._scanner = scanner
 
     @property
@@ -89,10 +102,12 @@ class PETCoincidenceDescriptor(abc.ABC):
         lc = Line3DCollection(ls, linewidths=lw, **kwargs)
         ax.add_collection(lc)
 
-    def show_all_lors(self, ax: plt.Axes, lw: float = 0.2, **kwargs) -> None:
-
-        start_mod, start_ind, end_mod, end_ind = self.get_lor_indices()
-
+    def show_lors(self,
+                  lors: None | npt.NDArray,
+                  ax: plt.Axes,
+                  lw: float = 0.2,
+                  **kwargs) -> None:
+        start_mod, start_ind, end_mod, end_ind = self.get_lor_indices(lors)
         p1s = self.scanner.get_lor_endpoints(start_mod, start_ind)
         p2s = self.scanner.get_lor_endpoints(end_mod, end_ind)
 
@@ -144,10 +159,14 @@ class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
 class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
-    def __init__(self,
-                 scanner: scanners.RegularPolygonPETScannerGeometry,
-                 radial_trim: int = 3,
-                 max_ring_difference: int | None = None) -> None:
+    def __init__(
+        self,
+        scanner: scanners.RegularPolygonPETScannerGeometry,
+        radial_trim: int = 3,
+        max_ring_difference: int | None = None,
+        sinogram_spatial_axis_order:
+        SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.RVP
+    ) -> None:
 
         super().__init__(scanner)
 
@@ -161,6 +180,8 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         self._num_rad = (self.scanner.num_lor_endpoints_per_ring +
                          1) - 2 * self._radial_trim
         self._num_views = self.scanner.num_lor_endpoints_per_ring // 2
+
+        self._sinogram_spatial_axis_order = sinogram_spatial_axis_order
 
         self.setup_plane_indices()
         self.setup_view_indices()
@@ -205,6 +226,10 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def end_in_ring_index(self) -> npt.NDArray:
         return self._end_in_ring_index
 
+    @property
+    def sinogram_spatial_axis_order(self) -> SinogramSpatialAxisOrder:
+        return self._sinogram_spatial_axis_order
+
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
     # abstract methods from the base class that we have to implement
@@ -226,9 +251,30 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         if linear_lor_indices is None:
             linear_lor_indices = np.arange(self.num_lors)
 
-        radial_elements, views, planes = np.unravel_index(
-            linear_lor_indices,
-            (self.num_rad, self.num_views, self.num_planes))
+        if self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RVP:
+            radial_elements, views, planes = np.unravel_index(
+                linear_lor_indices,
+                (self.num_rad, self.num_views, self.num_planes))
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RPV:
+            radial_elements, planes, views = np.unravel_index(
+                linear_lor_indices,
+                (self.num_rad, self.num_planes, self.num_views))
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VRP:
+            views, radial_elements, planes = np.unravel_index(
+                linear_lor_indices,
+                (self.num_views, self.num_rad, self.num_planes))
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VPR:
+            views, planes, radial_elements = np.unravel_index(
+                linear_lor_indices,
+                (self.num_views, self.num_planes, self.num_rad))
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PVR:
+            planes, views, radial_elements = np.unravel_index(
+                linear_lor_indices,
+                (self.num_planes, self.num_views, self.num_rad))
+        elif self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PRV:
+            planes, radial_elements, views = np.unravel_index(
+                linear_lor_indices,
+                (self.num_planes, self.num_rad, self.num_views))
 
         start_ring = self.start_plane_index[planes]
         end_ring = self.end_plane_index[planes]
