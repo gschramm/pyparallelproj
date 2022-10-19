@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation
 
 import pyparallelproj.scanner_modules as pps
 import pyparallelproj.data as ppd
