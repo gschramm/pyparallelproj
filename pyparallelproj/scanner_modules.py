@@ -8,7 +8,6 @@ except:
     import numpy.typing as cpt
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
 class PETScannerModule(abc.ABC):
@@ -37,14 +36,32 @@ class PETScannerModule(abc.ABC):
 
     @property
     def num_lor_endpoints(self) -> int:
+        """total number of LOR endpoints in the module
+
+        Returns
+        -------
+        int
+        """
         return self._num_lor_endpoints
 
     @property
     def lor_endpoint_numbers(self) -> npt.NDArray:
+        """array enumerating all the LOR endpoints in the module
+
+        Returns
+        -------
+        npt.NDArray
+        """
         return self._lor_endpoint_numbers
 
     @property
     def affine_transformation_matrix(self) -> npt.NDArray:
+        """4x4 affine transformation matrix
+
+        Returns
+        -------
+        npt.NDArray
+        """
         return self._affine_transformation_matrix
 
     @abc.abstractmethod
@@ -170,20 +187,45 @@ class RectangularPETScannerModule(PETScannerModule):
 
     @property
     def n(self) -> tuple[int, int]:
+        """number of LOR endpoints in the two direction of the module
+
+        Returns
+        -------
+        tuple[int, int]
+        """
         return self._n
 
     @property
     def ax0(self) -> int:
+        """axis number for the first direction
+
+        Returns
+        -------
+        int
+        """
         return self._ax0
 
     @property
     def ax1(self) -> int:
+        """axis number for the second direction
+
+        Returns
+        -------
+        int
+        """
         return self._ax1
 
     @property
     def lor_spacing(self) -> tuple[float, float]:
+        """spacing between the LOR endpoints in the two directions
+
+        Returns
+        -------
+        tuple[float, float]
+        """
         return self._lor_spacing
 
+    # abstract method from base class to be implemented
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
         if inds is None:
@@ -238,20 +280,45 @@ class RandomizedRectangularPETScannerModule(PETScannerModule):
 
     @property
     def n(self) -> tuple[int, int]:
+        """number of LOR endpoints in the two direction of the module
+
+        Returns
+        -------
+        tuple[int, int]
+        """
         return self._n
 
     @property
     def ax0(self) -> int:
+        """axis number for the first direction
+
+        Returns
+        -------
+        int
+        """
         return self._ax0
 
     @property
     def ax1(self) -> int:
+        """axis number for the second direction
+
+        Returns
+        -------
+        int
+        """
         return self._ax1
 
     @property
     def lor_spacing(self) -> tuple[float, float]:
+        """spacing between the LOR endpoints in the two directions
+
+        Returns
+        -------
+        tuple[float, float]
+        """
         return self._lor_spacing
 
+    # abstract method from base class to be implemented
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
         if inds is None:
@@ -303,28 +370,65 @@ class RegularPolygonPETScannerModule(PETScannerModule):
 
     @property
     def radius(self) -> float:
+        """inner radius of the regular polygon
+
+        Returns
+        -------
+        float
+        """
         return self._radius
 
     @property
     def num_sides(self) -> int:
+        """number of sides of the regular polygon
+
+        Returns
+        -------
+        int
+        """
         return self._num_sides
 
     @property
     def num_lor_endpoints_per_side(self) -> int:
+        """number of LOR endpoints per side
+
+        Returns
+        -------
+        int
+        """
         return self._num_lor_endpoints_per_side
 
     @property
     def ax0(self) -> int:
+        """axis number for the first module direction
+
+        Returns
+        -------
+        int
+        """
         return self._ax0
 
     @property
     def ax1(self) -> int:
+        """axis number for the second module direction
+
+        Returns
+        -------
+        int
+        """
         return self._ax1
 
     @property
     def lor_spacing(self) -> float:
-        return self._lor_spacing
+        """spacing between the LOR endpoints in a module along the polygon
 
+        Returns
+        -------
+        float
+        """
+        return self._lor_spacing
+ 
+    # abstract method from base class to be implemented
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
         if inds is None:
@@ -347,8 +451,8 @@ class RegularPolygonPETScannerModule(PETScannerModule):
 
 class ModularizedPETScannerGeometry:
 
-    def __init__(self, 
-                 modules: tuple[PETScannerModule], 
+    def __init__(self,
+                 modules: tuple[PETScannerModule],
                  xp: types.ModuleType = np) -> None:
         self._modules = modules
         self._num_modules = len(self._modules)
@@ -404,7 +508,7 @@ class ModularizedPETScannerGeometry:
     @property
     def xp(self) -> types.ModuleType:
         return self._xp
-    
+
     @xp.setter
     def xp(self, value: types.ModuleType):
         self._xp = value
@@ -414,8 +518,9 @@ class ModularizedPETScannerGeometry:
                                   index_in_module: npt.NDArray) -> npt.NDArray:
         return self.all_lor_endpoints_index_offset[module] + index_in_module
 
-    def get_lor_endpoints(self, module: npt.NDArray,
-                          index_in_module: npt.NDArray) -> npt.NDArray | cpt.NDArray:
+    def get_lor_endpoints(
+            self, module: npt.NDArray,
+            index_in_module: npt.NDArray) -> npt.NDArray | cpt.NDArray:
         return self.all_lor_endpoints[
             self.linear_lor_endpoint_index(module, index_in_module), :]
 
@@ -525,4 +630,3 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
     @property
     def num_lor_endpoints_per_ring(self) -> int:
         return self._num_lor_endpoints_per_module[0]
-
