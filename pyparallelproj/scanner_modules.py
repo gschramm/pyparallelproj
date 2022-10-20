@@ -10,6 +10,8 @@ except:
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
+xpNDArray = npt.NDArray | cpt.NDArray
+
 
 class PETScannerModule(abc.ABC):
 
@@ -347,8 +349,8 @@ class RegularPolygonPETScannerModule(PETScannerModule):
 
 class ModularizedPETScannerGeometry:
 
-    def __init__(self, 
-                 modules: tuple[PETScannerModule], 
+    def __init__(self,
+                 modules: tuple[PETScannerModule],
                  xp: types.ModuleType = np) -> None:
         self._modules = modules
         self._num_modules = len(self._modules)
@@ -398,13 +400,13 @@ class ModularizedPETScannerGeometry:
         return self._all_lor_endpoints_module_number
 
     @property
-    def all_lor_endpoints(self) -> npt.NDArray | cpt.NDArray:
+    def all_lor_endpoints(self) -> xpNDArray:
         return self._all_lor_endpoints
 
     @property
     def xp(self) -> types.ModuleType:
         return self._xp
-    
+
     @xp.setter
     def xp(self, value: types.ModuleType):
         self._xp = value
@@ -415,7 +417,7 @@ class ModularizedPETScannerGeometry:
         return self.all_lor_endpoints_index_offset[module] + index_in_module
 
     def get_lor_endpoints(self, module: npt.NDArray,
-                          index_in_module: npt.NDArray) -> npt.NDArray | cpt.NDArray:
+                          index_in_module: npt.NDArray) -> xpNDArray:
         return self.all_lor_endpoints[
             self.linear_lor_endpoint_index(module, index_in_module), :]
 
@@ -525,4 +527,3 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
     @property
     def num_lor_endpoints_per_ring(self) -> int:
         return self._num_lor_endpoints_per_module[0]
-
