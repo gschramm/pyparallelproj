@@ -58,7 +58,7 @@ scanner.show_lor_endpoints(ax2,
                            s=1)
 
 # show 200 random LORs
-cd.show_lors(lors, ax1)
+cd.show_lors(ax1, lors)
 
 # show all LORs of a views in a single plane
 cd.show_view(ax2, cd.num_views // 2, scanner.num_rings // 2)

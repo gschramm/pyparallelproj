@@ -1,9 +1,12 @@
-#TODO: - split return of get_lor_indices() in 4 1D arrays
-#      - enum for sinogram axis order + pass it to constructor
 import abc
-import itertools
+import types
 import numpy as np
 import numpy.typing as npt
+try:
+    import cupy.typing as cpt
+except:
+    import numpy.typing as cpt
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
@@ -344,18 +347,27 @@ class RegularPolygonPETScannerModule(PETScannerModule):
 
 class ModularizedPETScannerGeometry:
 
-    def __init__(self, modules: tuple[PETScannerModule]) -> None:
+    def __init__(self, 
+                 modules: tuple[PETScannerModule], 
+                 xp: types.ModuleType = np) -> None:
         self._modules = modules
         self._num_modules = len(self._modules)
         self._num_lor_endpoints_per_module = np.array(
             [x.num_lor_endpoints for x in self._modules])
         self._num_lor_endpoints = self._num_lor_endpoints_per_module.sum()
 
+        # member variable that determines whether we want to use
+        # a numpy or cupy array to store the array of all lor endpoints
+        self._xp = xp
+
+        self.setup_all_lor_endpoints()
+
+    def setup_all_lor_endpoints(self) -> None:
         self._all_lor_endpoints_index_offset = np.cumsum(
             np.pad(self._num_lor_endpoints_per_module,
                    (1, 0)))[:self._num_modules]
 
-        self._all_lor_endpoints = np.vstack(
+        self._all_lor_endpoints = self._xp.vstack(
             [x.get_lor_endpoints() for x in self._modules])
 
         self._all_lor_endpoints_module_number = np.repeat(
@@ -386,15 +398,24 @@ class ModularizedPETScannerGeometry:
         return self._all_lor_endpoints_module_number
 
     @property
-    def all_lor_endpoints(self) -> npt.NDArray:
+    def all_lor_endpoints(self) -> npt.NDArray | cpt.NDArray:
         return self._all_lor_endpoints
+
+    @property
+    def xp(self) -> types.ModuleType:
+        return self._xp
+    
+    @xp.setter
+    def xp(self, value: types.ModuleType):
+        self._xp = value
+        self.setup_all_lor_endpoints()
 
     def linear_lor_endpoint_index(self, module: npt.NDArray,
                                   index_in_module: npt.NDArray) -> npt.NDArray:
         return self.all_lor_endpoints_index_offset[module] + index_in_module
 
     def get_lor_endpoints(self, module: npt.NDArray,
-                          index_in_module: npt.NDArray) -> npt.NDArray:
+                          index_in_module: npt.NDArray) -> npt.NDArray | cpt.NDArray:
         return self.all_lor_endpoints[
             self.linear_lor_endpoint_index(module, index_in_module), :]
 
@@ -425,7 +446,8 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
                  lor_spacing: float,
                  num_rings: int,
                  ring_positions: npt.NDArray,
-                 symmetry_axis: int = 0) -> None:
+                 symmetry_axis,
+                 xp: types.ModuleType = np) -> None:
 
         self._radius = radius
         self._num_sides = num_sides
@@ -461,7 +483,7 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
                     ax1=self._ax1))
 
         modules = tuple(modules)
-        super().__init__(modules)
+        super().__init__(modules, xp)
 
         self._all_lor_endpoints_index_in_ring = np.arange(
             self.num_lor_endpoints

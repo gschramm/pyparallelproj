@@ -1,5 +1,6 @@
 import abc
 import enum
+import itertools
 
 import numpy as np
 import numpy.typing as npt
@@ -97,19 +98,31 @@ class PETCoincidenceDescriptor(abc.ABC):
         p1s = self.scanner.get_lor_endpoints(start_mod, start_ind)
         p2s = self.scanner.get_lor_endpoints(end_mod, end_ind)
 
+        # get_lor_endpoints can return a numpy or cupy array
+        # it scanner uses cupy arrays, we have to convert them into numpy arrays
+        if self.scanner.xp.__name__ == 'cupy':
+            p1s = self.scanner.xp.asnumpy(p1s)
+            p2s = self.scanner.xp.asnumpy(p2s)
+
         ls = np.hstack([p1s, p2s]).copy()
         ls = ls.reshape((-1, 2, 3))
         lc = Line3DCollection(ls, linewidths=lw, **kwargs)
         ax.add_collection(lc)
 
     def show_lors(self,
-                  lors: None | npt.NDArray,
                   ax: plt.Axes,
+                  lors: None | npt.NDArray,
                   lw: float = 0.2,
                   **kwargs) -> None:
         start_mod, start_ind, end_mod, end_ind = self.get_lor_indices(lors)
         p1s = self.scanner.get_lor_endpoints(start_mod, start_ind)
         p2s = self.scanner.get_lor_endpoints(end_mod, end_ind)
+
+        # get_lor_endpoints can return a numpy or cupy array
+        # it scanner uses cupy arrays, we have to convert them into numpy arrays
+        if self.scanner.xp.__name__ == 'cupy':
+            p1s = self.scanner.xp.asnumpy(p1s)
+            p2s = self.scanner.xp.asnumpy(p2s)
 
         ls = np.hstack([p1s, p2s]).copy()
         ls = ls.reshape((-1, 2, 3))
@@ -379,6 +392,12 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
         p1s = self.scanner.get_lor_endpoints(start_ring, start_inds)
         p2s = self.scanner.get_lor_endpoints(end_ring, end_inds)
+
+        # get_lor_endpoints can return a numpy or cupy array
+        # it scanner uses cupy arrays, we have to convert them into numpy arrays
+        if self.scanner.xp.__name__ == 'cupy':
+            p1s = self.scanner.xp.asnumpy(p1s)
+            p2s = self.scanner.xp.asnumpy(p2s)
 
         ls = np.hstack([p1s, p2s]).copy()
         ls = ls.reshape((-1, 2, 3))
