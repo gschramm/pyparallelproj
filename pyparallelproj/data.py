@@ -1,9 +1,17 @@
+#TODO subset slicer subset = a[subset_slicer(i)]
+
 import abc
 import enum
 import itertools
 
+import math
+
 import numpy as np
 import numpy.typing as npt
+try:
+    import cupy.typing as cpt
+except:
+    import numpy.typing as cpt
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
@@ -178,7 +186,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         radial_trim: int = 3,
         max_ring_difference: int | None = None,
         sinogram_spatial_axis_order:
-        SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.RVP
+        SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR
     ) -> None:
 
         super().__init__(scanner)
@@ -403,3 +411,152 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         ls = ls.reshape((-1, 2, 3))
         lc = Line3DCollection(ls, linewidths=lw, **kwargs)
         ax.add_collection(lc)
+
+
+class LORSubsetter(abc.ABC):
+
+    def __init__(self, num_lors: int) -> None:
+        self._num_lors = num_lors
+
+    @property
+    @abc.abstractmethod
+    def num_subsets(self) -> int:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_subset_indices(self, subset: int) -> npt.NDArray:
+        raise NotImplementedError
+
+    @property
+    def num_lors(self) -> int:
+        return self._num_lors
+
+
+class RandomLORSubsetter(LORSubsetter):
+
+    def __init__(self, num_lors: int, num_subsets: int) -> None:
+
+        super().__init__(num_lors)
+
+        self._num_subsets = num_subsets
+        self._all_lor_indices = np.arange(self.num_lors)
+        self.shuffle()
+        self._all_lor_subset_indices = np.array_split(self._all_lor_indices,
+                                                      self._num_subsets)
+
+    @property
+    def num_subsets(self) -> int:
+        return self._num_subsets
+
+    @property
+    def all_lor_indices(self) -> npt.NDArray:
+        return self._all_lor_indices
+
+    @property
+    def all_lor_subset_indices(self) -> list[npt.NDArray]:
+        return self._all_lor_subset_indices
+
+    def get_subset_indices(self, subset: int) -> npt.NDArray:
+        if subset >= self.num_subsets:
+            raise ValueError(f'subset must be < {self.num_subsets}')
+
+        return self._all_lor_subset_indices[subset]
+
+    def shuffle(self) -> None:
+        np.random.shuffle(self._all_lor_indices)
+
+
+class SingoramViewSubsetter(LORSubsetter):
+
+    def __init__(
+            self,
+            coincidence_descriptor: RegularPolygonPETCoincidenceDescriptor,
+            num_subsets: int) -> None:
+
+        self._num_subsets = num_subsets
+        self._coincidence_descriptor = coincidence_descriptor
+        super().__init__(self._coincidence_descriptor.num_lors)
+
+        if self._coincidence_descriptor.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RVP:
+            self._view_axis = 1
+        elif self._coincidence_descriptor.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RPV:
+            self._view_axis = 2
+        elif self._coincidence_descriptor.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VRP:
+            self._view_axis = 0
+        elif self._coincidence_descriptor.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.VPR:
+            self._view_axis = 0
+        elif self._coincidence_descriptor.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PVR:
+            self._view_axis = 1
+        elif self._coincidence_descriptor.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.PRV:
+            self._view_axis = 2
+
+        dtype = np.uint64
+
+        if self._coincidence_descriptor.num_lors <= 2**16:
+            dtype = np.uint16
+        elif self._coincidence_descriptor.num_lors <= 2**32:
+            dtype = np.uint32
+
+        all_lor_indices = np.arange(self.num_lors, dtype=dtype).reshape(
+            self._coincidence_descriptor.sinogram_spatial_shape)
+
+        self._start_views = np.arange(self.num_subsets)
+        self._start_views[0::2] = np.arange(
+            self.num_subsets)[(self.num_subsets // 2):]
+        self._start_views[1::2] = np.arange(
+            self.num_subsets)[:(self.num_subsets // 2)]
+
+        self._subset_views = []
+        for i, start_view in enumerate(self._start_views):
+            self._subset_views.append(
+                np.arange(start_view, self._coincidence_descriptor.num_views,
+                          self.num_subsets))
+
+        self._all_lor_subset_indices = []
+
+        for views in self._subset_views:
+            if self._view_axis == 0:
+                self._all_lor_subset_indices.append(
+                    all_lor_indices[views, :, :].ravel())
+            elif self._view_axis == 1:
+                self._all_lor_subset_indices.append(
+                    all_lor_indices[:, views, :].ravel())
+            elif self._view_axis == 2:
+                self._all_lor_subset_indices.append(
+                    all_lor_indices[:, :, views].ravel())
+
+        del all_lor_indices
+
+    @property
+    def num_subsets(self) -> int:
+        return self._num_subsets
+
+    def get_subset_indices(self, subset: int) -> npt.NDArray:
+        return self._all_lor_subset_indices[subset]
+
+
+if __name__ == '__main__':
+
+    import matplotlib.pyplot as plt
+
+    num_rings = 3
+
+    sc = scanners.RegularPolygonPETScannerGeometry(350., 28, 16, 4., num_rings,
+                                                   4 * np.arange(num_rings), 0)
+
+    cd = RegularPolygonPETCoincidenceDescriptor(
+        sc, sinogram_spatial_axis_order=SinogramSpatialAxisOrder.VRP)
+    ss = SingoramViewSubsetter(cd, 3)
+
+    if num_rings < 4:
+        fig = plt.figure(figsize=(12, 6))
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+        sc.show_lor_endpoints(ax1)
+        sc.show_lor_endpoints(ax2)
+        cd.show_lors(ax1, lors=None, color='b')
+        cd.show_lors(ax2, lors=ss.get_subset_indices(0), color='r')
+        cd.show_lors(ax2, lors=ss.get_subset_indices(1), color='g')
+        cd.show_lors(ax2, lors=ss.get_subset_indices(2), color='k')
+        fig.tight_layout()
+        fig.show()

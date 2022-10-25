@@ -427,7 +427,7 @@ class RegularPolygonPETScannerModule(PETScannerModule):
         float
         """
         return self._lor_spacing
- 
+
     # abstract method from base class to be implemented
     def get_raw_lor_endpoints(self,
                               inds: npt.NDArray | None = None) -> npt.NDArray:
@@ -551,7 +551,7 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
                  lor_spacing: float,
                  num_rings: int,
                  ring_positions: npt.NDArray,
-                 symmetry_axis,
+                 symmetry_axis: int,
                  xp: types.ModuleType = np) -> None:
 
         self._radius = radius
