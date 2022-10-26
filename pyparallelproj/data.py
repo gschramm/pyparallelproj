@@ -1,10 +1,6 @@
-#TODO subset slicer subset = a[subset_slicer(i)]
-
 import abc
 import enum
 import itertools
-
-import math
 
 import numpy as np
 import numpy.typing as npt
@@ -29,9 +25,16 @@ class SinogramSpatialAxisOrder(enum.Enum):
 
 
 class PETCoincidenceDescriptor(abc.ABC):
+    """abstract base class to describe which modules / indices in modules of a 
+       modularized PET scanner are in coincidence; defining geometrical LORs"""
 
     def __init__(self,
                  scanner: scanners.ModularizedPETScannerGeometry) -> None:
+        """
+        Parameters
+        ----------
+        scanner : scanners.ModularizedPETScannerGeometry
+        """
         self._scanner = scanner
 
     @property
@@ -47,8 +50,19 @@ class PETCoincidenceDescriptor(abc.ABC):
             self, module: int, index_in_module: int) -> npt.NDArray:
         """ return (N,2) array of two integers showing which module/index_in_module combinations
             are in coincidence with the given input module / index_in_module
+
+        Parameters
+        ----------
+        module : int
+            the module number
+        index_in_module : int
+            the (LOR endpoint) index in the module
+
+        Returns
+        -------
+        npt.NDArray
+            (N,2) array of two integers showing which module/index_in_module
         """
-        raise NotImplementedError
 
     @abc.abstractmethod
     def get_lor_indices(
@@ -58,13 +72,25 @@ class PETCoincidenceDescriptor(abc.ABC):
         """ mapping that maps the linear LOR index to the 4 1D arrays
             representing start_module, start_index_in_module, end_module,
             end_index_in_module
+
+        Parameters
+        ----------
+        linear_lor_indices : None | npt.NDArray, optional
+            containing the linear (flattened) indices of geometrical LORs, by default None
+
+        Returns
+        -------
+        tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]
+            start_module, start_index_in_module, end_module, end_index_in_module
         """
-        raise NotImplementedError
 
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
 
     def setup_lor_lookup_table(self) -> None:
+        """setup a lookup table for the start and end modules / indecies in module for all 
+           geometrical LORs
+        """
         for mod, num_lor_endpoints in enumerate(
                 self.scanner.num_lor_endpoints_per_module):
             for lor in range(num_lor_endpoints):
@@ -93,6 +119,21 @@ class PETCoincidenceDescriptor(abc.ABC):
                                    index_in_module: int,
                                    lw: float = 0.2,
                                    **kwargs) -> None:
+        """show all geometrical LORs for a given LOR endpoint
+
+        Parameters
+        ----------
+        ax : plt.Axes
+            a 3D matplotlib axes
+        module : int
+            the module number
+        index_in_module : int
+            the index in the module
+        lw : float, optional
+            line width, by default 0.2
+        **kwargs : 
+            keyword arguments passed to Line3DCollection
+        """
 
         tmp = self.get_modules_and_indices_in_coincidence(
             module, index_in_module)
@@ -122,6 +163,20 @@ class PETCoincidenceDescriptor(abc.ABC):
                   lors: None | npt.NDArray,
                   lw: float = 0.2,
                   **kwargs) -> None:
+        """show a given set of LORs
+
+        Parameters
+        ----------
+        ax : plt.Axes
+            a 3D matplotlib axes
+        lors : None | npt.NDArray
+            the linear (flattened) index of the geometrical LORs to show
+            None means all geometrical LORs are shown
+        lw : float, optional
+            linewidth, by default 0.2
+        **kwargs : 
+            keyword arguments passed to Line3DCollection
+        """
         start_mod, start_ind, end_mod, end_ind = self.get_lor_indices(lors)
         p1s = self.scanner.get_lor_endpoints(start_mod, start_ind)
         p2s = self.scanner.get_lor_endpoints(end_mod, end_ind)
