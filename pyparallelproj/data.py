@@ -539,7 +539,7 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
 
-    num_rings = 3
+    num_rings = 45
 
     sc = scanners.RegularPolygonPETScannerGeometry(350., 28, 16, 4., num_rings,
                                                    4 * np.arange(num_rings), 0)
@@ -548,7 +548,7 @@ if __name__ == '__main__':
         sc, sinogram_spatial_axis_order=SinogramSpatialAxisOrder.VRP)
     ss = SingoramViewSubsetter(cd, 3)
 
-    if num_rings < 4:
+    if cd.num_lors < 7000:
         fig = plt.figure(figsize=(12, 6))
         ax1 = fig.add_subplot(1, 2, 1, projection='3d')
         ax2 = fig.add_subplot(1, 2, 2, projection='3d')
@@ -560,3 +560,5 @@ if __name__ == '__main__':
         cd.show_lors(ax2, lors=ss.get_subset_indices(2), color='k')
         fig.tight_layout()
         fig.show()
+    else:
+        print(f'not plotting because of too many LORs {cd.num_lors}')
