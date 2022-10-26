@@ -4,10 +4,6 @@ import itertools
 
 import numpy as np
 import numpy.typing as npt
-try:
-    import cupy.typing as cpt
-except:
-    import numpy.typing as cpt
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
@@ -44,6 +40,13 @@ class PETCoincidenceDescriptor(abc.ABC):
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
     # abstract methods
+
+    @property
+    @abc.abstractmethod
+    def num_lors(self) -> int:
+        """the total number of geometrical LORs 
+        """
+        raise NotImplementedError
 
     @abc.abstractmethod
     def get_modules_and_indices_in_coincidence(
@@ -194,14 +197,24 @@ class PETCoincidenceDescriptor(abc.ABC):
 
 
 class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
-    """ generic coincidence logic where a LOR endpoint in a module is connected to all
-        all LOR endpoints of all other modules
+    """ Generic coincidence logic where a LOR endpoint in a module is connected to all
+        all LOR endpoints of all other modules.
+        The endpoints module / index numbers are stored in a lookup table which can be slow
     """
 
     def __init__(self, scanner: scanners.ModularizedPETScannerGeometry):
-
+        """
+        Parameters
+        ----------
+        scanner : scanners.ModularizedPETScannerGeometry
+            modularized scanner
+        """
         super().__init__(scanner)
         self.setup_lor_lookup_table()
+
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+    # abstract methods to be implemented
 
     @property
     def num_lors(self):
@@ -232,6 +245,9 @@ class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
         return np.array([modules, indices]).T
 
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+
 
 class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
@@ -243,6 +259,24 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         sinogram_spatial_axis_order:
         SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR
     ) -> None:
+        """Coincidence descriptor for a regular polygon PET scanner where
+           we have coincidences within and between "rings" 
+           The geometrical LORs can be sorted into a sinogram having a
+           "plane", "view" and "radial" axis.
+
+        Parameters
+        ----------
+        scanner : scanners.RegularPolygonPETScannerGeometry
+            a regular polygon PET scanner
+        radial_trim : int, optional
+            number of geometrial LORs to disregard in the radial direction, by default 3
+        max_ring_difference : int | None, optional
+            maximim ring difference to consider for coincidences, by default None means
+            all ring differences are included
+        sinogram_spatial_axis_order : SinogramSpatialAxisOrder, optional
+            order of the spatial axis in the sinogram, by default SinogramSpatialAxisOrder.PVR
+            which means "planes", "views", "radial"
+        """
 
         super().__init__(scanner)
 
@@ -301,9 +335,6 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def num_views(self) -> int:
         return self._num_views
 
-    @property
-    def num_lors(self) -> int:
-        return self.num_rad * self.num_views * self.num_planes
 
     @property
     def start_plane_index(self) -> npt.NDArray:
@@ -332,6 +363,10 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
     # abstract methods from the base class that we have to implement
+
+    @property
+    def num_lors(self) -> int:
+        return self.num_rad * self.num_views * self.num_planes
 
     def get_modules_and_indices_in_coincidence(
             self, module: int, index_in_module: int) -> npt.NDArray:
