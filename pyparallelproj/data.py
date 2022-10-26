@@ -260,7 +260,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR
     ) -> None:
         """Coincidence descriptor for a regular polygon PET scanner where
-           we have coincidences within and between "rings" 
+           we have coincidences within and between "rings (polygons of modules)" 
            The geometrical LORs can be sorted into a sinogram having a
            "plane", "view" and "radial" axis.
 
@@ -317,47 +317,57 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
     @property
     def radial_trim(self) -> int:
+        """number of geometrial LORs to disregard in the radial direction"""
         return self._radial_trim
 
     @property
     def max_ring_difference(self) -> int:
+        """the maximum ring difference"""
         return self._max_ring_difference
 
     @property
     def num_planes(self) -> int:
+        """number of planes in the sinogram"""
         return self._num_planes
 
     @property
     def num_rad(self) -> int:
+        """number of radial elements in the sinogram"""
         return self._num_rad
 
     @property
     def num_views(self) -> int:
+        """number of views in the sinogram"""
         return self._num_views
-
 
     @property
     def start_plane_index(self) -> npt.NDArray:
+        """start plane for all planes"""
         return self._start_plane_index
 
     @property
     def end_plane_index(self) -> npt.NDArray:
+        """end plane for all planes"""
         return self._end_plane_index
 
     @property
     def start_in_ring_index(self) -> npt.NDArray:
+        """start index within ring"""
         return self._start_in_ring_index
 
     @property
     def end_in_ring_index(self) -> npt.NDArray:
+        """end index within ring"""
         return self._end_in_ring_index
 
     @property
     def sinogram_spatial_axis_order(self) -> SinogramSpatialAxisOrder:
+        """spatial axis order of the sinogram"""
         return self._sinogram_spatial_axis_order
 
     @property
     def sinogram_spatial_shape(self) -> tuple[int, int, int]:
+        """spatial shape of the sinogram"""
         return self._sinogram_spatial_shape
 
     #-------------------------------------------------------------------
@@ -416,6 +426,18 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     #-------------------------------------------------------------------
 
     def get_modules_in_coincidence(self, module: int) -> npt.NDArray:
+        """return modules (rings) that are in coincidence with a given module (ring)
+
+        Parameters
+        ----------
+        module : int
+            the module (ring) number
+
+        Returns
+        -------
+        npt.NDArray
+            all modules (rings) that are in coincidence with a given module (ring)
+        """
 
         ring_numbers = np.arange(self.scanner.num_rings)
         i1 = np.abs(ring_numbers - module) <= self.max_ring_difference
@@ -424,6 +446,18 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
     def get_indices_in_module_in_coincidence(
             self, index_in_module: int) -> npt.NDArray:
+        """return indices (endpoints) within a ring that are in coincidence for a given endpoint
+
+        Parameters
+        ----------
+        index_in_module : int
+            the index of the endpoint in the module (ring)
+
+        Returns
+        -------
+        npt.NDArray
+            all indices (endpoint) within a ring that are in coincidence with a given endpoint
+        """
 
         tmp0 = self.end_in_ring_index[self.start_in_ring_index ==
                                       index_in_module]
@@ -436,6 +470,8 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         return indices_in_coinc
 
     def setup_plane_indices(self) -> None:
+        """setup the start / end plane indices (similar to a Michelogram)
+        """
         self._start_plane_index = np.arange(self.scanner.num_rings)
         self._end_plane_index = np.arange(self.scanner.num_rings)
 
@@ -451,6 +487,8 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         self._num_planes = self._start_plane_index.shape[0]
 
     def setup_view_indices(self) -> None:
+        """setup the start / end view indices
+        """
         n = self.scanner.num_lor_endpoints_per_ring
 
         self._start_in_ring_index = np.zeros((self.num_views, self.num_rad),
@@ -481,6 +519,19 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
                   plane: int,
                   lw: float = 0.2,
                   **kwargs) -> None:
+        """show all LORs of a single view in a given plane
+
+        Parameters
+        ----------
+        ax : plt.Axes
+            a 3D matplotlib axes
+        view : int
+            the view number
+        plane : int
+            the plane number
+        lw : float, optional
+            the line width, by default 0.2
+        """
 
         start_ring = self.start_plane_index[plane]
         end_ring = self.end_plane_index[plane]
@@ -506,26 +557,61 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 class LORSubsetter(abc.ABC):
 
     def __init__(self, num_lors: int) -> None:
+        """abstract base class for LORSubsetter
+
+        Parameters
+        ----------
+        num_lors : int
+            total number of geometrical LORs
+        """
         self._num_lors = num_lors
 
     @property
+    def num_lors(self) -> int:
+        """the total number of geometrical LORs"""
+        return self._num_lors
+
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+    # abstract methods
+    @property
     @abc.abstractmethod
     def num_subsets(self) -> int:
+        """the number of defined subsets"""
         raise NotImplementedError
 
     @abc.abstractmethod
     def get_subset_indices(self, subset: int) -> npt.NDArray:
+        """get the flattened indices of all geometrical LORs in a given subset
+
+        Parameters
+        ----------
+        subset : int
+            the subset number
+
+        Returns
+        -------
+        npt.NDArray
+            the flattened indices of all geometrical LORs
+        """
         raise NotImplementedError
 
-    @property
-    def num_lors(self) -> int:
-        return self._num_lors
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
 
 
 class RandomLORSubsetter(LORSubsetter):
 
     def __init__(self, num_lors: int, num_subsets: int) -> None:
+        """split a set of geometrical LORs into random subsets
 
+        Parameters
+        ----------
+        num_lors : int
+            the total number of geometrical LORs
+        num_subsets : int
+            the total number of subsets
+        """
         super().__init__(num_lors)
 
         self._num_subsets = num_subsets
@@ -535,24 +621,33 @@ class RandomLORSubsetter(LORSubsetter):
                                                       self._num_subsets)
 
     @property
-    def num_subsets(self) -> int:
-        return self._num_subsets
-
-    @property
     def all_lor_indices(self) -> npt.NDArray:
+        """return all geometrical LORs indices"""
         return self._all_lor_indices
 
     @property
     def all_lor_subset_indices(self) -> list[npt.NDArray]:
+        """return a list of all geometrical LORs indices within the subsets"""
         return self._all_lor_subset_indices
 
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+    # abstract methods we have to implement
     def get_subset_indices(self, subset: int) -> npt.NDArray:
         if subset >= self.num_subsets:
             raise ValueError(f'subset must be < {self.num_subsets}')
 
         return self._all_lor_subset_indices[subset]
 
+    @property
+    def num_subsets(self) -> int:
+        return self._num_subsets
+
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+
     def shuffle(self) -> None:
+        """shuffle the the LOR distribution across subsets"""
         np.random.shuffle(self._all_lor_indices)
 
 
@@ -562,6 +657,15 @@ class SingoramViewSubsetter(LORSubsetter):
             self,
             coincidence_descriptor: RegularPolygonPETCoincidenceDescriptor,
             num_subsets: int) -> None:
+        """view-based subsetter for regular polygon PET scanner coincidences
+
+        Parameters
+        ----------
+        coincidence_descriptor : RegularPolygonPETCoincidenceDescriptor
+            coincidence descriptor of a regular polygon PET
+        num_subsets : int
+            the number of subsets
+        """            
 
         self._num_subsets = num_subsets
         self._coincidence_descriptor = coincidence_descriptor
@@ -617,12 +721,17 @@ class SingoramViewSubsetter(LORSubsetter):
 
         del all_lor_indices
 
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
+    # abstract methods we have to implement
     @property
     def num_subsets(self) -> int:
         return self._num_subsets
 
     def get_subset_indices(self, subset: int) -> npt.NDArray:
         return self._all_lor_subset_indices[subset]
+    #-------------------------------------------------------------------
+    #-------------------------------------------------------------------
 
 
 if __name__ == '__main__':
