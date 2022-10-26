@@ -129,9 +129,10 @@ dmypy.json
 .pyre/
 
 # user defined ignores
-docs/*
 build_win/*
 wip/*
 *.qdrep
 .vscode/*
 docs/build/*
+docs/source/_autosummary
+docs/source/generated
