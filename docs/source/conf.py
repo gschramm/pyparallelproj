@@ -27,6 +27,7 @@ import sys
 sys.path.insert(0, os.path.abspath('../..'))  # Source code dir relative to this file
 
 extensions = [
+    'sphinx.ext.napoleon', # support for numpy docstring format
     'sphinx.ext.autodoc',  # Core library for html generation from docstrings
     'sphinx.ext.autosummary',  # Create neat summary tables
 ]
@@ -44,5 +45,5 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'classic'
+html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']

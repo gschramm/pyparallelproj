@@ -6,8 +6,6 @@
 Welcome to pyparallelproj's documentation!
 ==========================================
 
-Some words.
-
 .. autosummary::
    :toctree: _autosummary
    :recursive:
