@@ -8,12 +8,14 @@
 
 import os
 import sys
+import pyparallelproj
 
 sys.path.insert(0, os.path.abspath('../..'))
 
 project = 'pyparallelproj'
 copyright = '2022, Georg Schramm'
 author = 'Georg Schramm'
+version = pyparallelproj.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
