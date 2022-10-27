@@ -18,14 +18,15 @@ class ModularizedPETScannerGeometry:
 
     def __init__(self,
                  modules: tuple[mods.PETScannerModule],
-                 xp: types.ModuleType = np) -> None:
+                 xp: types.ModuleType | None = None) -> None:
         """
         Parameters
         ----------
-        modules : tuple[mods.PETScannerModule]
+        modules : tuple[PETScannerModule]
             a tuple of scanner modules
-        xp : types.ModuleType, optional
+        xp : types.ModuleType | None, optional default None
             module indicating whether to store all LOR endpoints as numpy as cupy array
+            default None means that numpy is used
         """
         self._modules = modules
         self._num_modules = len(self._modules)
@@ -35,7 +36,13 @@ class ModularizedPETScannerGeometry:
 
         # member variable that determines whether we want to use
         # a numpy or cupy array to store the array of all lor endpoints
-        self._xp = xp
+        if xp is None:
+            self._xp = np
+        else:
+            self._xp = xp
+
+        if self._xp.__name__ not in ['numpy', 'cupy']:
+            raise ValueError('xp must be numpy or cupy module')
 
         self.setup_all_lor_endpoints()
 
@@ -178,7 +185,7 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
                  num_rings: int,
                  ring_positions: npt.NDArray,
                  symmetry_axis: int,
-                 xp: types.ModuleType = np) -> None:
+                 xp: types.ModuleType | None = None) -> None:
         """
         Parameters
         ----------
@@ -196,8 +203,9 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
             1D array with the coordinate of the rings along the ring axis
         symmetry_axis : int
             the ring axis (0,1,2)
-        xp : types.ModuleType, optional
+        xp : types.ModuleType | None, optional default None
             numpy or cupy module used to store the coordinates of all LOR endpoints, by default np
+            None means that numpy is used
         """
 
         self._radius = radius
