@@ -1,3 +1,4 @@
+"""wrappers to call parallelproj C/CUDA library functions"""
 import ctypes
 from pyparallelproj.config import lib_parallelproj_c, lib_parallelproj_cuda, n_visible_gpus
 from pyparallelproj.config import joseph3d_fwd_cuda_kernel, joseph3d_back_cuda_kernel, joseph3d_fwd_tof_sino_cuda_kernel, joseph3d_back_tof_sino_cuda_kernel, joseph3d_fwd_tof_lm_cuda_kernel, joseph3d_back_tof_lm_cuda_kernel

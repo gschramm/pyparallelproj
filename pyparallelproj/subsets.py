@@ -1,5 +1,4 @@
 """module for defining classes related to data subsetting"""
-
 import abc
 
 import numpy as np

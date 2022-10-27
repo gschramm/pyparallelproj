@@ -1,3 +1,4 @@
+"""description of (PET) scanner modules containing LOR endpoints"""
 import abc
 import numpy as np
 import numpy.typing as npt

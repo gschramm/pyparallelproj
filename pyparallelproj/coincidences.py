@@ -1,3 +1,4 @@
+"""description of LOR endpoint combinations (LORs) in a scanners consisting of modules of LOR endpoints"""
 import abc
 import enum
 import itertools
@@ -35,6 +36,7 @@ class PETCoincidenceDescriptor(abc.ABC):
 
     @property
     def scanner(self) -> scanners.ModularizedPETScannerGeometry:
+        """the scanner for which coincidences are described"""
         return self._scanner
 
     #-------------------------------------------------------------------

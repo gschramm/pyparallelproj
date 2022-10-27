@@ -1,3 +1,4 @@
+"""package configurations"""
 import os
 import ctypes
 from ctypes import POINTER
@@ -37,7 +38,9 @@ else:
     lib_parallelproj_c_fname = find_library('parallelproj_c')
 
 if lib_parallelproj_c_fname is None:
-    warn('Cannot find parallelproj c lib. Consider setting the environment variable PARALLELPROJ_C_LIB.')
+    warn(
+        'Cannot find parallelproj c lib. Consider setting the environment variable PARALLELPROJ_C_LIB.'
+    )
 else:
     print(f'using PARALLELPROJ_C_LIB {lib_parallelproj_c_fname}')
 
@@ -153,7 +156,9 @@ if n_visible_gpus > 0:
         lib_parallelproj_cuda_fname = find_library('parallelproj_cuda')
 
     if lib_parallelproj_cuda_fname is None:
-        warn('Cannot find parallelproj cuda lib. Consider settting the environment variable PARALLELPROJ_CUDA_LIB.')
+        warn(
+            'Cannot find parallelproj cuda lib. Consider settting the environment variable PARALLELPROJ_CUDA_LIB.'
+        )
     else:
         print(f'using PARALLELPROJ_CUDA_LIB {lib_parallelproj_cuda_fname}')
         lib_parallelproj_cuda = npct.load_library(
@@ -282,14 +287,16 @@ if n_visible_gpus > 0:
             warn('cupy package is not available.')
         else:
             # find all cuda kernel files installed with the parallelproj libs
-            kernel_files = list(Path(lib_parallelproj_cuda_fname).parent.glob('projector_kernels.cu.*'))
+            kernel_files = list(
+                Path(lib_parallelproj_cuda_fname).parent.glob(
+                    'projector_kernels.cu.*'))
             kernel_file = None
             for k_file in kernel_files:
                 tmp = str(k_file).split('.cu.')
                 if len(tmp) > 1:
                     k_file_version = tmp[1]
                     if lib_parallelproj_cuda_fname.endswith(k_file_version):
-                        kernel_file = str(k_file) 
+                        kernel_file = str(k_file)
 
             if kernel_file is not None:
                 print(f'loading cupy cuda kernels from {kernel_file}')
@@ -297,10 +304,10 @@ if n_visible_gpus > 0:
                 with open(kernel_file, 'r') as f:
                     lines = f.read()
 
-                joseph3d_fwd_cuda_kernel = cp.RawKernel(lines,
-                                                        'joseph3d_fwd_cuda_kernel')
-                joseph3d_back_cuda_kernel = cp.RawKernel(lines,
-                                                         'joseph3d_back_cuda_kernel')
+                joseph3d_fwd_cuda_kernel = cp.RawKernel(
+                    lines, 'joseph3d_fwd_cuda_kernel')
+                joseph3d_back_cuda_kernel = cp.RawKernel(
+                    lines, 'joseph3d_back_cuda_kernel')
                 joseph3d_fwd_tof_sino_cuda_kernel = cp.RawKernel(
                     lines, 'joseph3d_fwd_tof_sino_cuda_kernel')
                 joseph3d_back_tof_sino_cuda_kernel = cp.RawKernel(
@@ -311,4 +318,3 @@ if n_visible_gpus > 0:
                     lines, 'joseph3d_back_tof_lm_cuda_kernel')
             else:
                 warn('cannot find cuda kernel file for cupy kernels')
-
