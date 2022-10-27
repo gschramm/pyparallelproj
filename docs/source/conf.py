@@ -44,3 +44,24 @@ exclude_patterns = []
 
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
+html_show_sourcelink = False
+
+html_theme_options = {
+    "search_bar_text":
+    "Your text here...",
+    "use_edit_page_button":
+    False,
+    "icon_links": [{
+        "name": "GitHub",
+        "url": "https://github.com/gschramm/pyparallelproj",
+        "icon": "fab fa-github-square",
+    }],
+}
+
+html_context = {
+    "github_url": "https://github.com",
+    "github_user": "gschramm",
+    "github_repo": "pyparallelproj",
+    "github_version": "main",
+    "doc_path": "docs",
+}
