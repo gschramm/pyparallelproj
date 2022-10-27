@@ -1,4 +1,5 @@
-"""a short script showing how to define an ringlike scanner with an extra module"""
+"""a short script showing how to define a non-ringlike scanner
+   in this example we consider a ringlike-scanner + an extra module"""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +9,9 @@ import pyparallelproj.scannermodules as scannermods
 import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
 
+#--------------------------------------------------------------------------------
+# scanner parameters
+
 radius = 20.
 num_sides = 7
 lor_spacing = 4.
@@ -15,7 +19,8 @@ ring_spacing = 5.
 num_lor_endpoints_per_side = 3
 num_rings = 4
 
-phis = np.linspace(0, 2 * np.pi, num_sides, endpoint=False)
+#--------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------
 
 mods = []
 
@@ -31,7 +36,9 @@ for i in range(num_rings):
             lor_spacing=lor_spacing,
             affine_transformation_matrix=aff_mat2))
 
+#--------------------------------------------------------------------------------
 # add extra module outside the ring
+
 aff_mat = np.eye(4)
 aff_mat[:-1, :-1] = Rotation.from_euler(
     'xyz',
@@ -46,10 +53,15 @@ mods.append(
         ax1=0,
         affine_transformation_matrix=aff_mat))
 
-#------------
+#--------------------------------------------------------------------------------
+# combine all modules into a scanner
 mods = tuple(mods)
-
 scanner = scanners.ModularizedPETScannerGeometry(mods)
+
+#--------------------------------------------------------------------------------
+# setup a coincidence descriptor that describes which LOR endpoints are connected
+# here the extra module breaks all symmetries which means we have to stick to
+# the generic coincidence descriptor (which is slow for big scanners)
 cd = coincidences.GenericPETCoincidenceDescriptor(scanner)
 
 fig = plt.figure(figsize=(7, 7))
