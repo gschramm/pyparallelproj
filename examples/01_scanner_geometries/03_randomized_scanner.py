@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
-import pyparallelproj.scanner_modules as pps
+import pyparallelproj.scannermodules as scannermods
+import pyparallelproj.scanners as scanners
+import pyparallelproj.coincidences as coincidences
 
 np.random.seed(2)
 
@@ -27,7 +29,7 @@ for i, phi in enumerate(phis):
     aff_mat[2, -1] = np.cos(phi) * radius
 
     mods.append(
-        pps.RandomizedRectangularPETScannerModule(
+        scannermods.RandomizedRectangularPETScannerModule(
             ([(1, 2), (1, 3), (2, 2)][np.random.randint(3)]),
             lor_spacing,
             ax0=1,
@@ -37,14 +39,14 @@ for i, phi in enumerate(phis):
 #------------
 mods = tuple(mods)
 
-scanner = pps.ModularizedPETScannerGeometry(mods)
-cd = pps.GenericPETCoincidenceDescriptor(scanner)
+scanner = scanners.ModularizedPETScannerGeometry(mods)
+cd = coincidences.GenericPETCoincidenceDescriptor(scanner)
 
 cd.setup_lor_lookup_table()
 
 fig = plt.figure(figsize=(7, 7))
 ax = fig.add_subplot(1, 1, 1, projection='3d')
 scanner.show_lor_endpoints(ax, show_linear_index=False, annotation_fontsize=6)
-cd.show_all_lors(ax)
+cd.show_lors(ax, None)
 fig.tight_layout()
 fig.show()

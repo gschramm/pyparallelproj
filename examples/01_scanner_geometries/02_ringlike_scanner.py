@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pyparallelproj.scanner_modules as pps
-import pyparallelproj.data as ppd
-import pyparallelproj.wrapper as ppw
+import pyparallelproj.scanners as scanners
+import pyparallelproj.coincidences as coincidences
 
 radius = 330
 num_sides = 28
@@ -15,22 +14,22 @@ max_ring_difference = num_rings - 1
 
 radial_trim = 49
 
-ring_positions = lor_spacing * (np.arange(num_rings) - num_rings/2 + 0.5)
+ring_positions = lor_spacing * (np.arange(num_rings) - num_rings / 2 + 0.5)
 
-scanner = pps.RegularPolygonPETScannerGeometry(radius,
-                                               num_sides,
-                                               num_lor_endpoints_per_side,
-                                               lor_spacing,
-                                               num_rings,
-                                               ring_positions,
-                                               symmetry_axis=0)
+scanner = scanners.RegularPolygonPETScannerGeometry(radius,
+                                                    num_sides,
+                                                    num_lor_endpoints_per_side,
+                                                    lor_spacing,
+                                                    num_rings,
+                                                    ring_positions,
+                                                    symmetry_axis=0)
 
 # setup the coincidence descriptor
-cd = ppd.RegularPolygonPETCoincidenceDescriptor(
+cd = coincidences.RegularPolygonPETCoincidenceDescriptor(
     scanner,
     radial_trim=radial_trim,
     max_ring_difference=max_ring_difference,
-    sinogram_spatial_axis_order=ppd.SinogramSpatialAxisOrder.PVR)
+    sinogram_spatial_axis_order=coincidences.SinogramSpatialAxisOrder.PVR)
 
 #----------------------------------------------------------------------------
 # get the start / end module and index number for the first 3 lors
@@ -42,26 +41,17 @@ start_mod, start_ind, end_mod, end_ind = cd.get_lor_indices(lors)
 xstart = scanner.get_lor_endpoints(start_mod, start_ind).astype(np.float32)
 xend = scanner.get_lor_endpoints(end_mod, end_ind).astype(np.float32)
 
-
 #--------------------------------------------------------------------------
 
-fig = plt.figure(figsize=(14, 7))
-ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-scanner.show_lor_endpoints(ax1,
+fig = plt.figure(figsize=(7, 7))
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+scanner.show_lor_endpoints(ax,
                            show_linear_index=False,
                            annotation_fontsize=0,
                            s=1)
-scanner.show_lor_endpoints(ax2,
-                           show_linear_index=False,
-                           annotation_fontsize=0,
-                           s=1)
-
-# show 200 random LORs
-cd.show_lors(ax1, lors)
 
 # show all LORs of a views in a single plane
-cd.show_view(ax2, cd.num_views // 2, scanner.num_rings // 2)
+cd.show_view(ax, cd.num_views // 2, scanner.num_rings // 2)
 
 fig.tight_layout()
 fig.show()
