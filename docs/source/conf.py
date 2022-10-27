@@ -26,6 +26,7 @@ extensions = [
     'sphinx.ext.napoleon',  # support for numpy docstring format
     'sphinx.ext.autodoc',  # Core library for html generation from docstrings
     'sphinx.ext.autosummary',  # Create neat summary tables
+    'sphinx.ext.mathjax',  # mathjax support
 ]
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
 

@@ -37,7 +37,8 @@ class PETCoincidenceDescriptor(abc.ABC):
         """
         Parameters
         ----------
-        scanner : scanners.ModularizedPETScannerGeometry
+        scanner : ModularizedPETScannerGeometry
+            a modularized PET scanner 
         """
         self._scanner = scanner
 
@@ -215,7 +216,7 @@ class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         """
         Parameters
         ----------
-        scanner : scanners.ModularizedPETScannerGeometry
+        scanner : ModularizedPETScannerGeometry
             modularized scanner
         """
         super().__init__(scanner)
@@ -278,7 +279,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
         Parameters
         ----------
-        scanner : scanners.RegularPolygonPETScannerGeometry
+        scanner : RegularPolygonPETScannerGeometry
             a regular polygon PET scanner
         radial_trim : int, optional
             number of geometrial LORs to disregard in the radial direction, by default 3
