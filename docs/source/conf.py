@@ -9,7 +9,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath('../../'))
+sys.path.insert(0, os.path.abspath('../..'))
 
 project = 'pyparallelproj'
 copyright = '2022, Georg Schramm'
@@ -22,16 +22,14 @@ author = 'Georg Schramm'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../..'))  # Source code dir relative to this file
-
 extensions = [
-    'sphinx.ext.napoleon', # support for numpy docstring format
+    'sphinx.ext.napoleon',  # support for numpy docstring format
     'sphinx.ext.autodoc',  # Core library for html generation from docstrings
     'sphinx.ext.autosummary',  # Create neat summary tables
 ]
 autosummary_generate = True  # Turn on sphinx.ext.autosummary
+
+autoclass_content = 'both'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -40,7 +38,6 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
