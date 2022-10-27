@@ -13,12 +13,19 @@ import pyparallelproj.scanners as scanners
 
 class SinogramSpatialAxisOrder(enum.Enum):
     """order of spatial axis in a sinogram R (radial), V (view), P (plane)"""
+
     RVP = enum.auto()
+    """[radial,view,plane]"""
     RPV = enum.auto()
+    """[radial,plane,view]"""
     VRP = enum.auto()
+    """[view,radial,plane]"""
     VPR = enum.auto()
+    """[view,plane,radial]"""
     PRV = enum.auto()
+    """[plane,radial,view]"""
     PVR = enum.auto()
+    """[plane,view,radial]"""
 
 
 class PETCoincidenceDescriptor(abc.ABC):
