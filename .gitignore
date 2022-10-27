@@ -136,3 +136,4 @@ wip/*
 docs/build/*
 docs/source/_autosummary
 docs/source/generated
+pyparallelproj/docs/*
