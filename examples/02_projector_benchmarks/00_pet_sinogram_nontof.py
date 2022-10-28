@@ -17,13 +17,13 @@ except:
 
 #---------------------------------------------------------------------
 
-xp = np
+xp = cp
 
 radius = 350
 num_sides = 28
 num_lor_endpoints_per_side = 16
 lor_spacing = 4.
-num_rings = 45
+num_rings = 18
 
 max_ring_difference = num_rings - 1
 radial_trim = 49
@@ -71,15 +71,22 @@ for io, sinogram_order in enumerate(sinogram_orders):
         # setup a box like test image
         voxsize = np.array([2., 2., 2.], dtype=np.float32)
         img_shape = [250, 250, 250]
-        img_shape[symmetry_axis] = int(
-            (ring_positions.max() - ring_positions.min()) / voxsize[0])
+        img_shape[symmetry_axis] = max(
+            int((ring_positions.max() - ring_positions.min()) / voxsize[0]), 1)
         img_shape = tuple(img_shape)
         n0, n1, n2 = img_shape
 
         # setup an image containing a square
         img = xp.zeros(img_shape, dtype=np.float32)
-        img[(n0 // 4):(3 * n0 // 4), (n1 // 4):(3 * n1 // 4),
-            (n2 // 4):(3 * n2 // 4)] = 1
+        sl = [
+            slice(n0 // 4, 3 * n0 // 4, None),
+            slice(n1 // 4, 3 * n1 // 4, None),
+            slice(n2 // 4, 3 * n2 // 4, None)
+        ]
+
+        sl[symmetry_axis] = slice(0, img.shape[symmetry_axis], None)
+        sl = tuple(sl)
+        img[sl] = 1
 
         # setup the image origin = the coordinate of the [0,0,0] voxel
         img_origin = (-(np.array(img.shape, dtype=np.float32) / 2) +
