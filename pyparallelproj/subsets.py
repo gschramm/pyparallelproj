@@ -185,3 +185,9 @@ class SingoramViewSubsetter(LORSubsetter):
 
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
+
+    def get_sinogram_subset_shape(self, subset: int) -> tuple[int, int, int]:
+        tmp = list(self._coincidence_descriptor.sinogram_spatial_shape)
+        tmp[self._view_axis] = self._subset_views[subset].shape[0]
+
+        return tuple(tmp)
