@@ -17,20 +17,24 @@ except:
 
 #---------------------------------------------------------------------
 
-xp = cp
+xp = np
 
 radius = 350
 num_sides = 28
 num_lor_endpoints_per_side = 16
 lor_spacing = 4.
-num_rings = 18
+num_rings = 45
 
 max_ring_difference = num_rings - 1
 radial_trim = 49
 
-ring_positions = lor_spacing * (np.arange(num_rings) - num_rings / 2 + 0.5)
+ring_positions = 5.55 * (np.arange(num_rings) - num_rings / 2 + 0.5)
 
 num_subsets = 28
+
+voxsize = np.array([2., 2., 2.], dtype=np.float32)
+num_trans = 300
+
 #---------------------------------------------------------------------
 sinogram_orders = ('PVR', 'PRV', 'VPR', 'VRP', 'RPV', 'RVP')
 symmetry_axes = (0, 1, 2)
@@ -69,10 +73,10 @@ for io, sinogram_order in enumerate(sinogram_orders):
         xend = scanner.get_lor_endpoints(end_mod, end_ind).astype(xp.float32)
 
         # setup a box like test image
-        voxsize = np.array([2., 2., 2.], dtype=np.float32)
-        img_shape = [250, 250, 250]
+        img_shape = [num_trans, num_trans, num_trans]
         img_shape[symmetry_axis] = max(
-            int((ring_positions.max() - ring_positions.min()) / voxsize[0]), 1)
+            int((ring_positions.max() - ring_positions.min()) /
+                voxsize[symmetry_axis]), 1)
         img_shape = tuple(img_shape)
         n0, n1, n2 = img_shape
 
@@ -107,8 +111,9 @@ for io, sinogram_order in enumerate(sinogram_orders):
 
         # perform a complete backprojection
         back_img = xp.zeros(img.shape, dtype=xp.float32)
+        ones = xp.ones(img_fwd.shape, dtype=xp.float32)
         t2 = time.time()
-        ppw.joseph3d_back(xstart, xend, back_img, img_origin, voxsize, img_fwd)
+        ppw.joseph3d_back(xstart, xend, back_img, img_origin, voxsize, ones)
         if xp.__name__ == 'cupy':
             cp.cuda.Device().synchronize()
         t3 = time.time()
