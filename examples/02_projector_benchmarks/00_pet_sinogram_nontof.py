@@ -138,12 +138,14 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 for axx in ax:
     axx.set_xticks(np.arange(len(sinogram_orders)), sinogram_orders)
     axx.grid(ls=':')
+    axx.set_xlabel('sinogram order')
 
 ax[0].set_title('forward projection')
 ax[1].set_title('back projection')
 ax[2].set_title('forward + back projection')
 
 ax[0].legend()
+ax[0].set_ylabel('time (s)')
 
 fig.tight_layout()
 fig.show()
