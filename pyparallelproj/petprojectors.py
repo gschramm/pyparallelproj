@@ -1,8 +1,10 @@
+import numpy as np
 import numpy.typing as npt
 
 import pyparallelproj.coincidences as coincidences
-import pyparallelproj.wrapper as ppw
+import pyparallelproj.wrapper as wrapper
 import pyparallelproj.subsets as subsets
+import pyparallelproj.operators as operators
 
 try:
     import cupy.typing as cpt
@@ -12,7 +14,7 @@ except:
     import numpy.typing as cpt
 
 
-class NonTOFPETJosephProjector:
+class NonTOFPETJosephProjector(operators.LinearOperator):
 
     def __init__(self,
                  coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
@@ -28,6 +30,11 @@ class NonTOFPETJosephProjector:
         self._voxel_size = voxel_size
         self._subsetter = subsetter
 
+        super().__init__(
+            self._image_shape,
+            (np.prod(self._coincidence_descriptor.sinogram_spatial_shape), ),
+            self.coincidence_descriptor.scanner.xp)
+
     @property
     def coincidence_descriptor(self) -> coincidences.PETCoincidenceDescriptor:
         return self._coincidence_descriptor
@@ -37,20 +44,16 @@ class NonTOFPETJosephProjector:
         return self._image_shape
 
     @property
-    def image_origin(self) -> tuple[float, float, float]:
-        return self._image_origin
+    def image_origin(self) -> npt.NDArray | cpt.NDArray:
+        return self.xp.array(self._image_origin, dtype=self.xp.float32)
 
     @property
-    def voxel_size(self) -> tuple[float, float, float]:
-        return self._voxel_size
+    def voxel_size(self) -> npt.NDArray | cpt.NDArray:
+        return self.xp.array(self._voxel_size, dtype=self.xp.float32)
 
     @property
     def subsetter(self) -> subsets.LORSubsetter:
         return self._subsetter
-
-    @property
-    def xp(self):
-        return self.coincidence_descriptor.scanner.xp
 
     def forward_subset(
             self,
@@ -69,8 +72,9 @@ class NonTOFPETJosephProjector:
             end_mod, end_ind).astype(self.xp.float32)
 
         image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)
-        #ppw.joseph3d_fwd(xstart, xend, x, self.image_origin, self.voxel_size,
-        #                 image_forward)
+
+        wrapper.joseph3d_fwd(xstart, xend, x, self.image_origin,
+                             self.voxel_size, image_forward)
 
         return image_forward
 
@@ -103,8 +107,8 @@ class NonTOFPETJosephProjector:
             end_mod, end_ind).astype(self.xp.float32)
 
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-        #ppw.joseph3d_back(xstart, xend, back_image, self.image_origin,
-        #                  self.voxel_size, y_subset)
+        wrapper.joseph3d_back(xstart, xend, back_image, self.image_origin,
+                              self.voxel_size, y_subset)
 
         return back_image
 

@@ -12,7 +12,7 @@ except:
     warnings.warn('cupy module not available')
     import numpy as cp
 
-xp = np
+xp = cp
 
 radius = 350
 num_sides = 28
@@ -25,17 +25,17 @@ radial_trim = 49
 
 ring_positions = 5.55 * (np.arange(num_rings) - num_rings / 2 + 0.5)
 
-num_subsets = 28
+num_subsets = 1
 
 voxsize = (2., 2., 2.)
 num_trans = 300
 
-sinogram_order = 'PVR'
+sinogram_order = 'RVP'
 symmetry_axis = 2
 
 img_shape = (123, 45, 5)
 img_origin = (0., 0., 0.)
-img = np.ones(img_shape)
+img = xp.ones(img_shape, dtype=xp.float32)
 #---------------------------------------------------------------------
 scanner = scanners.RegularPolygonPETScannerGeometry(
     radius,

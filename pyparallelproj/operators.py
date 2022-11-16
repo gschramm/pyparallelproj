@@ -1,4 +1,5 @@
 import abc
+import types
 
 import numpy.typing as npt
 
@@ -14,7 +15,8 @@ except:
 
 class LinearOperator(abc.ABC):
 
-    def __init__(self, x_shape: tuple, y_shape: tuple) -> None:
+    def __init__(self, x_shape: tuple, y_shape: tuple,
+                 xp: types.ModuleType) -> None:
         """Linear operator abstract base class that maps real array x to real array y
 
         Parameters
@@ -23,11 +25,15 @@ class LinearOperator(abc.ABC):
             shape of x array
         y_shape : tuple
             shape of y array
+        xp : types.ModuleType | None, optional default None
+            module indicating whether to store all LOR endpoints as numpy as cupy array
+            default None means that numpy is used
         """
         super().__init__()
 
         self._x_shape = x_shape
         self._y_shape = y_shape
+        self._xp = xp
 
     @property
     def x_shape(self) -> tuple:
@@ -51,8 +57,14 @@ class LinearOperator(abc.ABC):
         """
         return self._y_shape
 
+    @property
+    def xp(self) -> types.ModuleType:
+        """module indicating whether the LOR endpoints are stored as numpy or cupy array"""
+        return self._xp
+
     @abc.abstractmethod
-    def forward(self, x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+    def forward(self,
+                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
         """forward step
 
         Parameters
@@ -68,7 +80,8 @@ class LinearOperator(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def adjoint(self, y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+    def adjoint(self,
+                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
         """adjoint of forward step
 
         Parameters
@@ -86,13 +99,13 @@ class LinearOperator(abc.ABC):
     def adjointness_test(self) -> None:
         """test if adjoint is really the adjoint of forward
         """
-        x = np.random.rand(*self._x_shape)
-        y = np.random.rand(*self._y_shape)
+        x = self.xp.random.rand(*self._x_shape).astype(self.xp.float32)
+        y = self.xp.random.rand(*self._y_shape).astype(self.xp.float32)
 
         x_fwd = self.forward(x)
         y_back = self.adjoint(y)
 
-        assert (np.isclose((x_fwd * y).sum(), (x * y_back).sum()))
+        assert (self.xp.isclose((x_fwd * y).sum(), (x * y_back).sum()))
 
     def norm(self, num_iter=20) -> float:
         """estimate norm of operator via power iterations
@@ -108,12 +121,11 @@ class LinearOperator(abc.ABC):
             the estimated norm
         """
 
-        x = np.random.rand(*self._x_shape)
+        x = self.xp.random.rand(*self._x_shape).astype(self.xp.float32)
 
         for i in range(num_iter):
             x = self.adjoint(self.forward(x))
-            n = np.linalg.norm(x.ravel())
+            n = self.xp.linalg.norm(x.ravel())
             x /= n
 
-        return np.sqrt(n)
-
+        return self.xp.sqrt(n)
