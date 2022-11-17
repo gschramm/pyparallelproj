@@ -22,6 +22,6 @@ setuptools.setup(
     python_requires='>=3.10',
     install_requires=[
         'numpy>=1.18', 'matplotlib>=3.2.1', 'numba>=0.49', 'scipy>=1.2',
-        'attrs>=22.0'
+        'attrs>=22.0', 'pydantic>=1.10'
     ],
     include_package_data=True)
