@@ -15,15 +15,15 @@ except:
 
 class LinearOperator(abc.ABC):
 
-    def __init__(self, x_shape: tuple, y_shape: tuple,
+    def __init__(self, input_shape: tuple, output_shape: tuple,
                  xp: types.ModuleType) -> None:
         """Linear operator abstract base class that maps real array x to real array y
 
         Parameters
         ----------
-        x_shape : tuple
+        input_shape : tuple
             shape of x array
-        y_shape : tuple
+        output_shape : tuple
             shape of y array
         xp : types.ModuleType | None, optional default None
             module indicating whether to store all LOR endpoints as numpy as cupy array
@@ -31,12 +31,12 @@ class LinearOperator(abc.ABC):
         """
         super().__init__()
 
-        self._x_shape = x_shape
-        self._y_shape = y_shape
+        self._input_shape = input_shape
+        self._output_shape = output_shape
         self._xp = xp
 
     @property
-    def x_shape(self) -> tuple:
+    def input_shape(self) -> tuple:
         """shape of x array
 
         Returns
@@ -44,10 +44,10 @@ class LinearOperator(abc.ABC):
         tuple
             shape of x array
         """
-        return self._x_shape
+        return self._input_shape
 
     @property
-    def y_shape(self):
+    def output_shape(self):
         """shape of y array
 
         Returns
@@ -55,7 +55,7 @@ class LinearOperator(abc.ABC):
         tuple
             shape of y array
         """
-        return self._y_shape
+        return self._output_shape
 
     @property
     def xp(self) -> types.ModuleType:
@@ -99,8 +99,8 @@ class LinearOperator(abc.ABC):
     def adjointness_test(self) -> None:
         """test if adjoint is really the adjoint of forward
         """
-        x = self.xp.random.rand(*self._x_shape).astype(self.xp.float32)
-        y = self.xp.random.rand(*self._y_shape).astype(self.xp.float32)
+        x = self.xp.random.rand(*self._input_shape).astype(self.xp.float32)
+        y = self.xp.random.rand(*self._output_shape).astype(self.xp.float32)
 
         x_fwd = self.forward(x)
         y_back = self.adjoint(y)
@@ -121,7 +121,7 @@ class LinearOperator(abc.ABC):
             the estimated norm
         """
 
-        x = self.xp.random.rand(*self._x_shape).astype(self.xp.float32)
+        x = self.xp.random.rand(*self._input_shape).astype(self.xp.float32)
 
         for i in range(num_iter):
             x = self.adjoint(self.forward(x))

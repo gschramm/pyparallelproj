@@ -55,6 +55,9 @@ class NonTOFPETJosephProjector(operators.LinearOperator):
     def subsetter(self) -> subsets.LORSubsetter:
         return self._subsetter
 
+    def get_subset_shape(self, subset: int) -> tuple[int]:
+        return self.subsetter.get_subset_shape(subset)
+
     def forward_subset(
             self,
             x: npt.NDArray | cpt.NDArray,
@@ -152,6 +155,10 @@ class TOFPETJosephProjector(NonTOFPETJosephProjector):
     def tof_parameters(self) -> tof.TOFParameters:
         return self._tof_parameters
 
+    def get_subset_shape(self, subset: int) -> tuple[int, int]:
+        return self.subsetter.get_subset_shape(subset) + (
+            self.tof_parameters.num_tofbins, )
+
     def forward_subset(
             self,
             x: npt.NDArray | cpt.NDArray,
@@ -227,7 +234,6 @@ class TOFPETJosephProjector(NonTOFPETJosephProjector):
     def adjoint(self,
                 y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
 
-        pass
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
 
         for subset in range(self.subsetter.num_subsets):
