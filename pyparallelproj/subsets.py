@@ -32,8 +32,21 @@ class Subsetter(abc.ABC):
         """
         raise NotImplementedError
 
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
+    @abc.abstractmethod
+    def get_subset_index_len(self, subset: int) -> int:
+        """get the shape of the subset indices array
+
+        Parameters
+        ----------
+        subset : int
+            the subset number
+
+        Returns
+        -------
+        int
+            length of the subset index array
+        """
+        raise NotImplementedError
 
 
 class RandomLORSubsetter(Subsetter):
@@ -78,6 +91,9 @@ class RandomLORSubsetter(Subsetter):
             raise ValueError(f'subset must be < {self.num_subsets}')
 
         return self._all_lor_subset_indices[subset]
+
+    def get_subset_index_len(self, subset: int) -> int:
+        return self._all_lor_subset_indices[subset].shape[0]
 
     @property
     def num_subsets(self) -> int:
@@ -177,8 +193,8 @@ class SingoramViewSubsetter(Subsetter):
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
 
-    def get_subset_shape(self, subset: int) -> tuple[int]:
-        return self._all_lor_subset_indices[subset].shape
+    def get_subset_index_len(self, subset: int) -> int:
+        return self._all_lor_subset_indices[subset].shape[0]
 
     def get_sinogram_subset_shape(self, subset: int) -> tuple[int, int, int]:
         tmp = list(self._coincidence_descriptor.sinogram_spatial_shape)

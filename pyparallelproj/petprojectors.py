@@ -16,10 +16,10 @@ except:
     import numpy.typing as cpt
 
 
-class PETProjector(operators.LinearOperator):
+class PETProjector(operators.LinearSubsetOperator):
     """
     Abstract base class for NonTOF and TOF PET projectors
-    """    
+    """
 
     def __init__(self,
                  coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
@@ -43,7 +43,7 @@ class PETProjector(operators.LinearOperator):
             output_shape = (self.coincidence_descriptor.num_lors, )
 
         super().__init__(self.image_shape, output_shape,
-                         self.coincidence_descriptor.scanner.xp)
+                         self.coincidence_descriptor.scanner.xp, subsetter)
 
     @property
     def coincidence_descriptor(self) -> coincidences.PETCoincidenceDescriptor:
@@ -73,54 +73,14 @@ class PETProjector(operators.LinearOperator):
     def tof(self) -> bool:
         return self.tof_parameters is not None
 
-    def get_subset_shape(self, subset: int) -> tuple[int]:
+    def get_subset_shape(self, subset: int) -> tuple[int, ...]:
         if self.tof:
-            subset_shape = self.subsetter.get_subset_shape(subset) + (
-                self.tof_parameters.num_tofbins, )
+            subset_shape = (self.subsetter.get_subset_index_len(subset),
+                            self.tof_parameters.num_tofbins)
         else:
-            subset_shape = self.subsetter.get_subset_shape(subset)
+            subset_shape = (self.subsetter.get_subset_index_len(subset), )
 
         return subset_shape
-
-    @abc.abstractmethod
-    def forward_subset(
-            self,
-            x: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
-
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def adjoint_subset(
-            self,
-            y_subset: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
-
-        raise NotImplementedError
-
-    def forward(self,
-                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        image_forward = self.xp.zeros(self.output_shape, dtype=self.xp.float32)
-
-        for subset in range(self.subsetter.num_subsets):
-            lors = self.subsetter.get_subset_indices(subset)
-            image_forward[lors] = self.forward_subset(x, lors=lors)
-
-        return image_forward
-
-    def adjoint(self,
-                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-
-        for subset in range(self.subsetter.num_subsets):
-            lors = self.subsetter.get_subset_indices(subset)
-            back_image += self.adjoint_subset(y[lors], subset=subset)
-
-        return back_image
 
 
 class NonTOFPETJosephProjector(PETProjector):
@@ -144,13 +104,13 @@ class NonTOFPETJosephProjector(PETProjector):
             self,
             x: npt.NDArray | cpt.NDArray,
             subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
 
-        if lors is None:
-            lors = self.subsetter.get_subset_indices(subset)
+        if inds is None:
+            inds = self.subsetter.get_subset_indices(subset)
 
         start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            lors)
+            inds)
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
             start_mod, start_ind).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
@@ -167,13 +127,13 @@ class NonTOFPETJosephProjector(PETProjector):
             self,
             y_subset: npt.NDArray | cpt.NDArray,
             subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
 
-        if lors is None:
-            lors = self.subsetter.get_subset_indices(subset)
+        if inds is None:
+            inds = self.subsetter.get_subset_indices(subset)
 
         start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            lors)
+            inds)
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
             start_mod, start_ind).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
@@ -208,13 +168,13 @@ class TOFPETJosephProjector(PETProjector):
             self,
             x: npt.NDArray | cpt.NDArray,
             subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
 
-        if lors is None:
-            lors = self.subsetter.get_subset_indices(subset)
+        if inds is None:
+            inds = self.subsetter.get_subset_indices(subset)
 
         start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            lors)
+            inds)
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
             start_mod, start_ind).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
@@ -239,13 +199,13 @@ class TOFPETJosephProjector(PETProjector):
             self,
             y_subset: npt.NDArray | cpt.NDArray,
             subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
 
-        if lors is None:
-            lors = self.subsetter.get_subset_indices(subset)
+        if inds is None:
+            inds = self.subsetter.get_subset_indices(subset)
 
         start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            lors)
+            inds)
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
             start_mod, start_ind).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(

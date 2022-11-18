@@ -12,7 +12,7 @@ except:
     import numpy.typing as cpt
 
 
-class PETAcquisitionModel(operators.LinearOperator):
+class PETAcquisitionModel(operators.LinearSubsetOperator):
 
     def __init__(self,
                  projector: petprojectors.PETProjector,
@@ -24,7 +24,8 @@ class PETAcquisitionModel(operators.LinearOperator):
         self._image_based_resolution_model = image_based_resolution_model
 
         super().__init__(projector.image_shape, projector.output_shape,
-                         projector.coincidence_descriptor.scanner.xp)
+                         projector.coincidence_descriptor.scanner.xp,
+                         projector.subsetter)
 
         if self._projector.tof:
             self._attenuation_factors = self.xp.expand_dims(
@@ -51,54 +52,36 @@ class PETAcquisitionModel(operators.LinearOperator):
     def image_based_resolution_model(self) -> None:
         return self._image_based_resolution_model
 
+    # abstract methods to be implemented
+
+    def get_subset_shape(self, subset: int) -> tuple[int, ...]:
+        return self.projector.get_subset_shape(subset)
+
     def forward_subset(self,
-                       image: npt.NDArray | cpt.NDArray,
+                       x: npt.NDArray | cpt.NDArray,
                        subset: int = 0,
-                       lors=None) -> npt.NDArray | cpt.NDArray:
+                       inds=None) -> npt.NDArray | cpt.NDArray:
 
-        if lors is None:
-            lors = self.projector.subsetter.get_subset_indices(subset)
+        if inds is None:
+            inds = self.projector.subsetter.get_subset_indices(subset)
 
-        img_fwd_subset = self.sensitivity_factors[
-            lors] * self.attenuation_factors[
-                lors] * self.projector.forward_subset(image, lors=lors)
+        x_forward = self.sensitivity_factors[inds] * self.attenuation_factors[
+            inds] * self.projector.forward_subset(x, inds=inds)
 
-        return img_fwd_subset
-
-    def forward(self,
-                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        image_forward = self.xp.zeros(self.output_shape, dtype=self.xp.float32)
-
-        for subset in range(self.projector.subsetter.num_subsets):
-            lors = self.projector.subsetter.get_subset_indices(subset)
-            image_forward[lors] = self.forward_subset(x, lors=lors)
-
-        return image_forward
+        return x_forward
 
     def adjoint_subset(
             self,
             y_subset: npt.NDArray | cpt.NDArray,
             subset: int = 0,
-            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
 
-        if lors is None:
-            lors = self.projector.subsetter.get_subset_indices(subset)
+        if inds is None:
+            inds = self.projector.subsetter.get_subset_indices(subset)
 
-        back_image = self.projector.adjoint_subset(
-            self.sensitivity_factors[lors] * self.attenuation_factors[lors] *
-            y_subset,
-            lors=lors)
+        y_back = self.projector.adjoint_subset(self.sensitivity_factors[inds] *
+                                               self.attenuation_factors[inds] *
+                                               y_subset,
+                                               inds=inds)
 
-        return back_image
-
-    def adjoint(self,
-                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        back_image = self.xp.zeros(self.input_shape, dtype=self.xp.float32)
-
-        for subset in range(self.projector.subsetter.num_subsets):
-            lors = self.projector.subsetter.get_subset_indices(subset)
-            back_image += self.adjoint_subset(y[lors], subset=subset)
-
-        return back_image
+        return y_back
