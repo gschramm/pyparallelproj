@@ -26,7 +26,7 @@ class PETProjector(operators.LinearOperator):
                  image_shape: tuple[int, int, int],
                  image_origin: tuple[float, float, float],
                  voxel_size: tuple[float, float, float],
-                 subsetter: subsets.LORSubsetter,
+                 subsetter: subsets.Subsetter,
                  tof_parameters: tof.TOFParameters | None = None) -> None:
 
         self._coincidence_descriptor = coincidence_descriptor
@@ -62,7 +62,7 @@ class PETProjector(operators.LinearOperator):
         return self.xp.array(self._voxel_size, dtype=self.xp.float32)
 
     @property
-    def subsetter(self) -> subsets.LORSubsetter:
+    def subsetter(self) -> subsets.Subsetter:
         return self._subsetter
 
     @property
@@ -131,7 +131,7 @@ class NonTOFPETJosephProjector(PETProjector):
                  image_origin: tuple[float, float,
                                      float], voxel_size: tuple[float, float,
                                                                float],
-                 subsetter: subsets.LORSubsetter) -> None:
+                 subsetter: subsets.Subsetter) -> None:
 
         super().__init__(coincidence_descriptor,
                          image_shape,
@@ -194,7 +194,7 @@ class TOFPETJosephProjector(PETProjector):
                                     int], image_origin: tuple[float, float,
                                                               float],
                  voxel_size: tuple[float, float,
-                                   float], subsetter: subsets.LORSubsetter,
+                                   float], subsetter: subsets.Subsetter,
                  tof_parameters: tof.TOFParameters) -> None:
 
         super().__init__(coincidence_descriptor,

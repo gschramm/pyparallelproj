@@ -7,25 +7,8 @@ import numpy.typing as npt
 import pyparallelproj.coincidences as coincidences
 
 
-class LORSubsetter(abc.ABC):
+class Subsetter(abc.ABC):
 
-    def __init__(self, num_lors: int) -> None:
-        """abstract base class for LORSubsetter
-
-        Parameters
-        ----------
-        num_lors : int
-            total number of geometrical LORs
-        """
-        self._num_lors = num_lors
-
-    @property
-    def num_lors(self) -> int:
-        """the total number of geometrical LORs"""
-        return self._num_lors
-
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
     # abstract methods
     @property
     @abc.abstractmethod
@@ -35,7 +18,7 @@ class LORSubsetter(abc.ABC):
 
     @abc.abstractmethod
     def get_subset_indices(self, subset: int) -> npt.NDArray:
-        """get the flattened indices of all geometrical LORs in a given subset
+        """get the indices along the subset axis (left most axis) belonging to a given subset
 
         Parameters
         ----------
@@ -45,7 +28,7 @@ class LORSubsetter(abc.ABC):
         Returns
         -------
         npt.NDArray
-            the flattened indices of all geometrical LORs
+            of indices
         """
         raise NotImplementedError
 
@@ -53,7 +36,7 @@ class LORSubsetter(abc.ABC):
     #-------------------------------------------------------------------
 
 
-class RandomLORSubsetter(LORSubsetter):
+class RandomLORSubsetter(Subsetter):
 
     def __init__(self, num_lors: int, num_subsets: int) -> None:
         """split a set of geometrical LORs into random subsets
@@ -65,13 +48,17 @@ class RandomLORSubsetter(LORSubsetter):
         num_subsets : int
             the total number of subsets
         """
-        super().__init__(num_lors)
 
+        self._num_lors = num_lors
         self._num_subsets = num_subsets
         self._all_lor_indices = np.arange(self.num_lors)
         self.shuffle()
         self._all_lor_subset_indices = np.array_split(self._all_lor_indices,
                                                       self._num_subsets)
+
+    @property
+    def num_lors(self) -> int:
+        return self._num_lors
 
     @property
     def all_lor_indices(self) -> npt.NDArray:
@@ -104,7 +91,7 @@ class RandomLORSubsetter(LORSubsetter):
         np.random.shuffle(self._all_lor_indices)
 
 
-class SingoramViewSubsetter(LORSubsetter):
+class SingoramViewSubsetter(Subsetter):
 
     def __init__(self, coincidence_descriptor: coincidences.
                  RegularPolygonPETCoincidenceDescriptor,
@@ -121,7 +108,7 @@ class SingoramViewSubsetter(LORSubsetter):
 
         self._num_subsets = num_subsets
         self._coincidence_descriptor = coincidence_descriptor
-        super().__init__(self._coincidence_descriptor.num_lors)
+        self._num_lors = self._coincidence_descriptor.num_lors
 
         if self._coincidence_descriptor.sinogram_spatial_axis_order is coincidences.SinogramSpatialAxisOrder.RVP:
             self._view_axis = 1
@@ -172,6 +159,10 @@ class SingoramViewSubsetter(LORSubsetter):
                     all_lor_indices[:, :, views].ravel())
 
         del all_lor_indices
+
+    @property
+    def num_lors(self) -> int:
+        return self._num_lors
 
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
