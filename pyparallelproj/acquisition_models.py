@@ -18,7 +18,8 @@ class PETAcquisitionModel(operators.LinearSubsetOperator):
                  projector: petprojectors.PETProjector,
                  attenuation_factors: npt.NDArray | cpt.NDArray,
                  sensitivity_factors: npt.NDArray | cpt.NDArray,
-                 image_based_resolution_model=None):
+                 image_based_resolution_model: None
+                 | operators.LinearOperator = None):
 
         self._projector = projector
         self._image_based_resolution_model = image_based_resolution_model
@@ -65,6 +66,9 @@ class PETAcquisitionModel(operators.LinearSubsetOperator):
         if inds is None:
             inds = self.projector.subsetter.get_subset_indices(subset)
 
+        if self.image_based_resolution_model is not None:
+            x = self.image_based_resolution_model.forward(x)
+
         x_forward = self.sensitivity_factors[inds] * self.attenuation_factors[
             inds] * self.projector.forward_subset(x, inds=inds)
 
@@ -83,5 +87,8 @@ class PETAcquisitionModel(operators.LinearSubsetOperator):
                                                self.attenuation_factors[inds] *
                                                y_subset,
                                                inds=inds)
+
+        if self.image_based_resolution_model is not None:
+            y_back = self.image_based_resolution_model.forward(y_back)
 
         return y_back

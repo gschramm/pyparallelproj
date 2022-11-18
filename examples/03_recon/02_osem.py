@@ -7,6 +7,7 @@ import pyparallelproj.subsets as subsets
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.acquisition_models as acquisition_models
+import pyparallelproj.resolution_models as resolution_models
 
 try:
     import cupy as cp
@@ -17,19 +18,26 @@ except:
 
 xp = cp
 
+if xp.__name__ == 'cupy':
+    import cupyx.scipy.ndimage as ndi
+else:
+    import scipy.ndimage as ndi
+
 #-------------------
 # scanner parameters
 radius = 350
 num_sides = 28
 num_lor_endpoints_per_side = 16
 lor_spacing = 4.
-num_rings = 18
+num_rings = 9
 
 max_ring_difference = num_rings - 1
 radial_trim = 49
 
 ring_positions = 5.55 * (np.arange(num_rings) - num_rings / 2 + 0.5)
 symmetry_axis = 2
+
+fwhm_mm = 4.5
 
 #-------------------
 # image parameters
@@ -48,6 +56,7 @@ num_subsets = 28
 # global sensitivity factor of the scanner that can be used to
 # control the number of simulated counts
 scanner_sensitivty = 0.1
+
 #---------------------------------------------------------------------
 
 num_axial = max(
@@ -66,6 +75,8 @@ img[(num_trans // 4):(-num_trans // 4),
 
 attenuation_img = (0.01 * (img > 0)).astype(xp.float32)
 
+res_model = resolution_models.GaussianImageBasedResolutionModel(
+    img_shape, tuple(fwhm_mm / (2.35 * x) for x in voxsize), xp, ndi)
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -114,9 +125,11 @@ sensitivity_factors = xp.full(nontof_projector.output_shape,
 contamination = xp.full(projector.output_shape, 1e-3, dtype=xp.float32)
 
 # setup the forward operator ("A") that also supports subsets
-acq_model = acquisition_models.PETAcquisitionModel(projector,
-                                                   attenuation_factors,
-                                                   sensitivity_factors)
+acq_model = acquisition_models.PETAcquisitionModel(
+    projector,
+    attenuation_factors,
+    sensitivity_factors,
+    image_based_resolution_model=res_model)
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
