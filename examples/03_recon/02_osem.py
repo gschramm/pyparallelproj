@@ -6,6 +6,7 @@ import pyparallelproj.coincidences as coincidences
 import pyparallelproj.subsets as subsets
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
+import pyparallelproj.acquisition_models as acquisition_models
 
 try:
     import cupy as cp
@@ -14,7 +15,7 @@ except:
     warnings.warn('cupy module not available')
     import numpy as cp
 
-xp = np
+xp = cp
 
 radius = 350
 num_sides = 28
@@ -80,22 +81,15 @@ projector = petprojectors.TOFPETJosephProjector(coincidence_descriptor,
 # simulate the attenuation factors (exp(-fwd(attenuation_image)))
 attenuation_factors = xp.exp(-nontof_projector.forward(attenuation_img))
 
-# if the projector is a TOF projector, we have to expand the dimension of the
-# nontof attenuation factors to be able to mulitply nontof and tof data
-if len(projector.output_shape) > 1:
-    attenuation_factors = xp.expand_dims(attenuation_factors, -1)
+# simulate LOR sensitivity factors
+sensitivity_factors = xp.ones(attenuation_factors.shape, dtype=xp.float32)
 
 # simulate a constant background contamination
-contamination = xp.full(projector.output_shape, 1e-3)
+contamination = xp.full(projector.output_shape, 1e-3, dtype=xp.float32)
 
-# evaluate the full forward model
-img_fwd = attenuation_factors * projector.forward(img) + contamination
-
-# evaluated the forward model for a subset of all LORs
-subset = 0
-lors = projector.subsetter.get_subset_indices(subset)
-img_fwd_subset = attenuation_factors[lors] * projector.forward_subset(
-    img, lors=lors) + contamination[lors]
+acq_model = acquisition_models.PETAcquisitionModel(projector,
+                                                   attenuation_factors,
+                                                   sensitivity_factors)
 
 #q = img_fwd.reshape(
 #    subsetter.get_sinogram_subset_shape(subset) +

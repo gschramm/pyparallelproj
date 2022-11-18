@@ -96,8 +96,13 @@ class LinearOperator(abc.ABC):
         """
         raise NotImplementedError()
 
-    def adjointness_test(self) -> None:
+    def adjointness_test(self, verbose=False) -> None:
         """test if adjoint is really the adjoint of forward
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            prnt verbose output
         """
         x = self.xp.random.rand(*self._input_shape).astype(self.xp.float32)
         y = self.xp.random.rand(*self._output_shape).astype(self.xp.float32)
@@ -105,7 +110,14 @@ class LinearOperator(abc.ABC):
         x_fwd = self.forward(x)
         y_back = self.adjoint(y)
 
-        assert (self.xp.isclose((x_fwd * y).sum(), (x * y_back).sum()))
+        a = (x_fwd * y).sum()
+        b = (x * y_back).sum()
+
+        if verbose:
+            print(f'<y, A x>   {a}')
+            print(f'<A^T y, x> {b}')
+
+        assert (self.xp.isclose(a, b))
 
     def norm(self, num_iter=20) -> float:
         """estimate norm of operator via power iterations

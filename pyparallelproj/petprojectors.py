@@ -1,3 +1,4 @@
+import abc
 import numpy as np
 import numpy.typing as npt
 
@@ -15,24 +16,33 @@ except:
     import numpy.typing as cpt
 
 
-class NonTOFPETJosephProjector(operators.LinearOperator):
+class PETProjector(operators.LinearOperator):
+    """
+    Abstract base class for NonTOF and TOF PET projectors
+    """    
 
     def __init__(self,
                  coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
                  image_shape: tuple[int, int, int],
-                 image_origin: tuple[float, float,
-                                     float], voxel_size: tuple[float, float,
-                                                               float],
-                 subsetter: subsets.LORSubsetter) -> None:
+                 image_origin: tuple[float, float, float],
+                 voxel_size: tuple[float, float, float],
+                 subsetter: subsets.LORSubsetter,
+                 tof_parameters: tof.TOFParameters | None = None) -> None:
 
         self._coincidence_descriptor = coincidence_descriptor
         self._image_shape = image_shape
         self._image_origin = image_origin
         self._voxel_size = voxel_size
         self._subsetter = subsetter
+        self._tof_parameters = tof_parameters
 
-        super().__init__(self._image_shape,
-                         (self._coincidence_descriptor.num_lors, ),
+        if self.tof:
+            output_shape = (self.coincidence_descriptor.num_lors,
+                            self.tof_parameters.num_tofbins)
+        else:
+            output_shape = (self.coincidence_descriptor.num_lors, )
+
+        super().__init__(self.image_shape, output_shape,
                          self.coincidence_descriptor.scanner.xp)
 
     @property
@@ -55,8 +65,80 @@ class NonTOFPETJosephProjector(operators.LinearOperator):
     def subsetter(self) -> subsets.LORSubsetter:
         return self._subsetter
 
+    @property
+    def tof_parameters(self) -> tof.TOFParameters | None:
+        return self._tof_parameters
+
+    @property
+    def tof(self) -> bool:
+        return self.tof_parameters is not None
+
     def get_subset_shape(self, subset: int) -> tuple[int]:
-        return self.subsetter.get_subset_shape(subset)
+        if self.tof:
+            subset_shape = self.subsetter.get_subset_shape(subset) + (
+                self.tof_parameters.num_tofbins, )
+        else:
+            subset_shape = self.subsetter.get_subset_shape(subset)
+
+        return subset_shape
+
+    @abc.abstractmethod
+    def forward_subset(
+            self,
+            x: npt.NDArray | cpt.NDArray,
+            subset: int = 0,
+            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def adjoint_subset(
+            self,
+            y_subset: npt.NDArray | cpt.NDArray,
+            subset: int = 0,
+            lors: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+
+        raise NotImplementedError
+
+    def forward(self,
+                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+
+        image_forward = self.xp.zeros(self.output_shape, dtype=self.xp.float32)
+
+        for subset in range(self.subsetter.num_subsets):
+            lors = self.subsetter.get_subset_indices(subset)
+            image_forward[lors] = self.forward_subset(x, lors=lors)
+
+        return image_forward
+
+    def adjoint(self,
+                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+
+        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
+
+        for subset in range(self.subsetter.num_subsets):
+            lors = self.subsetter.get_subset_indices(subset)
+            back_image += self.adjoint_subset(y[lors], subset=subset)
+
+        return back_image
+
+
+class NonTOFPETJosephProjector(PETProjector):
+
+    def __init__(self,
+                 coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
+                 image_shape: tuple[int, int, int],
+                 image_origin: tuple[float, float,
+                                     float], voxel_size: tuple[float, float,
+                                                               float],
+                 subsetter: subsets.LORSubsetter) -> None:
+
+        super().__init__(coincidence_descriptor,
+                         image_shape,
+                         image_origin,
+                         voxel_size,
+                         subsetter,
+                         tof_parameters=None)
 
     def forward_subset(
             self,
@@ -78,18 +160,6 @@ class NonTOFPETJosephProjector(operators.LinearOperator):
 
         wrapper.joseph3d_fwd(xstart, xend, x, self.image_origin,
                              self.voxel_size, image_forward)
-
-        return image_forward
-
-    def forward(self,
-                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        image_forward = self.xp.zeros(self.coincidence_descriptor.num_lors,
-                                      dtype=self.xp.float32)
-
-        for subset in range(self.subsetter.num_subsets):
-            lors = self.subsetter.get_subset_indices(subset)
-            image_forward[lors] = self.forward_subset(x, lors=lors)
 
         return image_forward
 
@@ -115,19 +185,8 @@ class NonTOFPETJosephProjector(operators.LinearOperator):
 
         return back_image
 
-    def adjoint(self,
-                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
 
-        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-
-        for subset in range(self.subsetter.num_subsets):
-            lors = self.subsetter.get_subset_indices(subset)
-            back_image += self.adjoint_subset(y[lors], subset=subset)
-
-        return back_image
-
-
-class TOFPETJosephProjector(NonTOFPETJosephProjector):
+class TOFPETJosephProjector(PETProjector):
 
     def __init__(self,
                  coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
@@ -138,26 +197,12 @@ class TOFPETJosephProjector(NonTOFPETJosephProjector):
                                    float], subsetter: subsets.LORSubsetter,
                  tof_parameters: tof.TOFParameters) -> None:
 
-        self._coincidence_descriptor = coincidence_descriptor
-        self._image_shape = image_shape
-        self._image_origin = image_origin
-        self._voxel_size = voxel_size
-        self._subsetter = subsetter
-        self._tof_parameters = tof_parameters
-
-        super(NonTOFPETJosephProjector,
-              self).__init__(self._image_shape,
-                             (self._coincidence_descriptor.num_lors,
-                              self._tof_parameters.num_tofbins),
-                             self.coincidence_descriptor.scanner.xp)
-
-    @property
-    def tof_parameters(self) -> tof.TOFParameters:
-        return self._tof_parameters
-
-    def get_subset_shape(self, subset: int) -> tuple[int, int]:
-        return self.subsetter.get_subset_shape(subset) + (
-            self.tof_parameters.num_tofbins, )
+        super().__init__(coincidence_descriptor,
+                         image_shape,
+                         image_origin,
+                         voxel_size,
+                         subsetter,
+                         tof_parameters=tof_parameters)
 
     def forward_subset(
             self,
@@ -190,19 +235,6 @@ class TOFPETJosephProjector(NonTOFPETJosephProjector):
 
         return image_forward
 
-    def forward(self,
-                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        image_forward = self.xp.zeros((self.coincidence_descriptor.num_lors,
-                                       self.tof_parameters.num_tofbins),
-                                      dtype=self.xp.float32)
-
-        for subset in range(self.subsetter.num_subsets):
-            lors = self.subsetter.get_subset_indices(subset)
-            image_forward[lors, :] = self.forward_subset(x, lors=lors)
-
-        return image_forward
-
     def adjoint_subset(
             self,
             y_subset: npt.NDArray | cpt.NDArray,
@@ -228,16 +260,5 @@ class TOFPETJosephProjector(NonTOFPETJosephProjector):
             self.xp.array([self.tof_parameters.tofcenter_offset],
                           dtype=self.xp.float32),
             self.tof_parameters.num_sigmas, self.tof_parameters.num_tofbins)
-
-        return back_image
-
-    def adjoint(self,
-                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-
-        for subset in range(self.subsetter.num_subsets):
-            lors = self.subsetter.get_subset_indices(subset)
-            back_image += self.adjoint_subset(y[lors, :], subset=subset)
 
         return back_image
