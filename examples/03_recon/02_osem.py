@@ -17,35 +17,59 @@ except:
 
 xp = cp
 
+#-------------------
+# scanner parameters
 radius = 350
 num_sides = 28
 num_lor_endpoints_per_side = 16
 lor_spacing = 4.
-num_rings = 1
+num_rings = 18
 
 max_ring_difference = num_rings - 1
 radial_trim = 49
 
 ring_positions = 5.55 * (np.arange(num_rings) - num_rings / 2 + 0.5)
-
-num_subsets = 5
-
-voxsize = (2., 2., 2.)
-
-sinogram_order = 'RVP'
 symmetry_axis = 2
 
+#-------------------
+# image parameters
 num_trans = 200
-img_shape = (num_trans, num_trans, 1)
+voxsize = (2., 2., 2.)
+
+#-------------------
+# sinogram (data order) parameters
+sinogram_order = 'RVP'
+
+#-------------------
+# reconstruction parameters
+num_iterations = 4
+num_subsets = 28
+
+# global sensitivity factor of the scanner that can be used to
+# control the number of simulated counts
+scanner_sensitivty = 0.1
+#---------------------------------------------------------------------
+
+num_axial = max(
+    int((ring_positions.max() - ring_positions.min()) /
+        voxsize[symmetry_axis]), 1)
+
+img_shape = (num_trans, num_trans, num_axial)
+
 img_origin = ((-0.5 * num_trans + 0.5) * voxsize[0],
               (-0.5 * num_trans + 0.5) * voxsize[1], 0.)
 img = xp.zeros(img_shape, dtype=xp.float32)
+
+# assign random value to central square
 img[(num_trans // 4):(-num_trans // 4),
-    (num_trans // 4):(-num_trans // 4), :] = 1
+    (num_trans // 4):(-num_trans // 4), :] = 4.3
 
 attenuation_img = (0.01 * (img > 0)).astype(xp.float32)
 
 #---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+
 scanner = scanners.RegularPolygonPETScannerGeometry(
     radius,
     num_sides,
@@ -82,63 +106,88 @@ projector = petprojectors.TOFPETJosephProjector(coincidence_descriptor,
 attenuation_factors = xp.exp(-nontof_projector.forward(attenuation_img))
 
 # simulate LOR sensitivity factors
-sensitivity_factors = xp.ones(attenuation_factors.shape, dtype=xp.float32)
+sensitivity_factors = xp.full(nontof_projector.output_shape,
+                              scanner_sensitivty,
+                              dtype=xp.float32)
 
 # simulate a constant background contamination
 contamination = xp.full(projector.output_shape, 1e-3, dtype=xp.float32)
 
+# setup the forward operator ("A") that also supports subsets
 acq_model = acquisition_models.PETAcquisitionModel(projector,
                                                    attenuation_factors,
                                                    sensitivity_factors)
 
-#q = img_fwd.reshape(
-#    subsetter.get_sinogram_subset_shape(subset) +
-#    (tof_parameters.num_tofbins, ))
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+# simulate acquired data based on forward model and known contaminations
 
-## simulate data
-## Ax
-#img_fwd = projector.forward(img)
-## additive contamination s
-#contamination = xp.ones_like(img_fwd)
-#contamination *= (0.5 * img_fwd.sum() / contamination.sum())
-#
-## data is Poisson(Ax + s)
-#sensitivity = 0.3
-#data = xp.random.poisson(sensitivity * (img_fwd + contamination))
-#
-## calculate the gradient of a random image with respect to the data fidelity term
-#
-#random_img = xp.random.rand(*img_shape).astype(xp.float32)
-#random_img_fwd = sensitivity * (projector.forward(random_img) + contamination)
-#
-#data_fidelity_gradient = projector.adjoint(
-#    sensitivity * (1 - data / random_img_fwd).astype(xp.float32))
-#
-##----------------------------------------------------
-##----------------------------------------------------
-## visualize results
-#
-## get arrays from GPU
-#if xp.__name__ == 'cupy':
-#    img = xp.asnumpy(img)
-#    img_fwd = xp.asnumpy(img_fwd)
-#    data = xp.asnumpy(data)
-#    data_fidelity_gradient = xp.asnumpy(data_fidelity_gradient)
-#
-## reshape img_fwd into a sinogram with 3 axis
-#tofsino_shape = (coincidence_descriptor.sinogram_spatial_shape) + (
-#    tof_parameters.num_tofbins, )
-#img_fwd = img_fwd.reshape(tofsino_shape)
-#data = data.reshape(tofsino_shape)
-#
-#fig, ax = plt.subplots(1, 4, figsize=(12, 3))
-#ax[0].imshow(img[..., 0])
-#ax[1].imshow(img_fwd[..., 0, 10])
-#ax[2].imshow(data[..., 0, 10])
-#ax[3].imshow(data_fidelity_gradient[..., 0])
-#ax[0].set_title('x')
-#ax[1].set_title('A x')
-#ax[2].set_title('Poisson(A x)')
-#ax[3].set_title('data_fidelity_gradient')
-#fig.tight_layout()
-#fig.show()
+img_fwd = acq_model.forward(img)
+
+# simulate a constant background contamination
+contamination = xp.full(projector.output_shape,
+                        img_fwd.mean() / 10.,
+                        dtype=xp.float32)
+
+# generate noisy data
+data = xp.random.poisson(img_fwd + contamination).astype(xp.uint16)
+
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+# run an OSEM reconstruction
+
+# (1) calculate the sensitivity images for all subsets
+sensitivity_images = xp.zeros(
+    (acq_model.subsetter.num_subsets, ) + acq_model.input_shape,
+    dtype=xp.float32)
+
+for subset in range(acq_model.subsetter.num_subsets):
+    ones = xp.ones(acq_model.get_subset_shape(subset), dtype=xp.float32)
+    sensitivity_images[subset, ...] = acq_model.adjoint_subset(ones, subset)
+
+# intialize the reconstruction
+x_init = xp.ones(acq_model.input_shape, dtype=xp.float32)
+x = x_init.copy()
+
+# run OSEM updates
+for it in range(num_iterations):
+    print(f'OSEM iteration {(it+1):03}')
+    for subset in range(acq_model.subsetter.num_subsets):
+        # get the LOR indices belonging to the current subset
+        inds = acq_model.subsetter.get_subset_indices(subset)
+        # calculate the expected data given the current reconstruction
+        expected_data = acq_model.forward_subset(
+            x, inds=inds) + contamination[inds]
+        # ratio of measured data and expected data
+        ratio = (data[inds] / expected_data).astype(xp.float32)
+        # OSEM update
+        x *= (acq_model.adjoint_subset(ratio, inds=inds) /
+              sensitivity_images[subset, ...])
+
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+
+# visualizations
+
+# get arrays from GPU if running with cupy
+if xp.__name__ == 'cupy':
+    data = xp.asnumpy(data)
+    x = xp.asnumpy(x)
+    img = xp.asnumpy(img)
+
+# reshape the data into a sinogram (just for visualizations)
+data_reshaped = data.reshape(coincidence_descriptor.sinogram_spatial_shape +
+                             (tof_parameters.num_tofbins, ))
+
+fig, ax = plt.subplots(1, 3, figsize=(12, 4))
+ims = dict(cmap=plt.cm.Greys, vmin=0, vmax=1.2 * img.max())
+ax[0].imshow(img[:, :, 0], **ims)
+ax[1].imshow(x[:, :, 0], **ims)
+ax[2].imshow(data_reshaped[:, :, num_rings // 2,
+                           tof_parameters.num_tofbins // 2],
+             cmap=plt.cm.Greys)
+fig.tight_layout()
+fig.show()
