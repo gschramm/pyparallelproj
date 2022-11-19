@@ -8,6 +8,7 @@ import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.acquisition_models as acquisition_models
 import pyparallelproj.resolution_models as resolution_models
+import pyparallelproj.algorithms as algorithms
 
 try:
     import cupy as cp
@@ -29,7 +30,7 @@ radius = 350
 num_sides = 28
 num_lor_endpoints_per_side = 16
 lor_spacing = 4.
-num_rings = 9
+num_rings = 1
 
 max_ring_difference = num_rings - 1
 radial_trim = 49
@@ -50,12 +51,12 @@ sinogram_order = 'RVP'
 
 #-------------------
 # reconstruction parameters
-num_iterations = 4
+num_iterations = 10
 num_subsets = 28
 
 # global sensitivity factor of the scanner that can be used to
 # control the number of simulated counts
-scanner_sensitivty = 0.1
+scanner_sensitivty = 1.
 
 #---------------------------------------------------------------------
 
@@ -66,12 +67,16 @@ num_axial = max(
 img_shape = (num_trans, num_trans, num_axial)
 
 img_origin = ((-0.5 * num_trans + 0.5) * voxsize[0],
-              (-0.5 * num_trans + 0.5) * voxsize[1], 0.)
+              (-0.5 * num_trans + 0.5) * voxsize[1],
+              (-0.5 * num_axial + 0.5) * voxsize[2])
+
 img = xp.zeros(img_shape, dtype=xp.float32)
 
 # assign random value to central square
-img[(num_trans // 4):(-num_trans // 4),
-    (num_trans // 4):(-num_trans // 4), :] = 4.3
+img[(num_trans // 5):(-num_trans // 5),
+    (num_trans // 5):(-num_trans // 5), :] = 4.3
+img[(num_trans // 3):(-num_trans // 3),
+    (num_trans // 3):(-num_trans // 3), :] = 6
 
 attenuation_img = (0.01 * (img > 0)).astype(xp.float32)
 
@@ -151,33 +156,10 @@ data = xp.random.poisson(img_fwd + contamination).astype(xp.uint16)
 #---------------------------------------------------------------------
 # run an OSEM reconstruction
 
-# (1) calculate the sensitivity images for all subsets
-sensitivity_images = xp.zeros(
-    (acq_model.subsetter.num_subsets, ) + acq_model.input_shape,
-    dtype=xp.float32)
+reconstructor = algorithms.OSEM(data, contamination, acq_model, verbose=True)
+reconstructor.run(num_iterations, evaluate_cost=False)
 
-for subset in range(acq_model.subsetter.num_subsets):
-    ones = xp.ones(acq_model.get_subset_shape(subset), dtype=xp.float32)
-    sensitivity_images[subset, ...] = acq_model.adjoint_subset(ones, subset)
-
-# intialize the reconstruction
-x_init = xp.ones(acq_model.input_shape, dtype=xp.float32)
-x = x_init.copy()
-
-# run OSEM updates
-for it in range(num_iterations):
-    print(f'OSEM iteration {(it+1):03}')
-    for subset in range(acq_model.subsetter.num_subsets):
-        # get the LOR indices belonging to the current subset
-        inds = acq_model.subsetter.get_subset_indices(subset)
-        # calculate the expected data given the current reconstruction
-        expected_data = acq_model.forward_subset(
-            x, inds=inds) + contamination[inds]
-        # ratio of measured data and expected data
-        ratio = (data[inds] / expected_data).astype(xp.float32)
-        # OSEM update
-        x *= (acq_model.adjoint_subset(ratio, inds=inds) /
-              sensitivity_images[subset, ...])
+x = reconstructor.x
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
