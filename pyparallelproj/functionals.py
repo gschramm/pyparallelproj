@@ -127,20 +127,20 @@ class SquaredL2NormDistance(SmoothDistance):
 
     def __init__(self, y: npt.NDArray | cpt.NDArray, xp: types.ModuleType):
         super().__init__(y, xp)
-        self._norm = SquaredL2Norm(xp)
+        self._sql2norm = SquaredL2Norm(xp)
 
     def __call__(self, x: npt.NDArray | cpt.NDArray) -> float:
-        return self._norm(x - self.y)
+        return self._sql2norm(x - self.y)
 
     def gradient(self,
                  x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-        return self._norm.gradient(x - self.y)
+        return x - self.y
 
     def prox_convex_dual(
             self, x: npt.NDArray | cpt.NDArray,
             sigma: float | npt.NDArray | cpt.NDArray
     ) -> npt.NDArray | cpt.NDArray:
-        return self._norm.prox_convex_dual(x - self.y, sigma)
+        return (x - sigma * self.y) / (1 + sigma)
 
 
 class NegativePoissonLogLikelihood(SmoothDistance):

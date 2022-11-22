@@ -150,6 +150,22 @@ class LinearOperator(abc.ABC):
         return self.xp.sqrt(n)
 
 
+class MatrixOperator(LinearOperator):
+
+    def __init__(self, A: npt.NDArray | cpt.NDArray,
+                 xp: types.ModuleType) -> None:
+        super().__init__((A.shape[1], ), (A.shape[0], ), xp)
+        self._A = A
+
+    def forward(self,
+                x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+        return self._A @ x
+
+    def adjoint(self,
+                y: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+        return self._A.T @ y
+
+
 class LinearSubsetOperator(LinearOperator):
 
     def __init__(self, input_shape: tuple[int, ...], output_shape: tuple[int,
