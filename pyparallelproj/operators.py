@@ -303,3 +303,34 @@ class GradientOperator(LinearOperator):
                               prepend=self._xp.take(y[i, ...], [0], i))
 
         return d
+
+
+class ProjectedGradientOperator(GradientOperator):
+    """projected finite difference gradient operator"""
+
+    def __init__(self, input_shape: tuple[int, ...],
+                 joint_gradient_field: npt.NDArray | cpt.NDArray,
+                 xp: types.ModuleType) -> None:
+
+        super().__init__(input_shape, xp)
+
+        if joint_gradient_field is not None:
+            norm = self.xp.linalg.norm(joint_gradient_field, axis=0)
+            inds = self.xp.where(norm > 0)
+            self.normalized_joint_gradient_field = joint_gradient_field.copy()
+
+            for i in range(self.output_shape[0]):
+                self.normalized_joint_gradient_field[
+                    i,
+                    ...][inds] = joint_gradient_field[i,
+                                                      ...][inds] / norm[inds]
+
+    def _project(self, g):
+        return g - (g * self.normalized_joint_gradient_field
+                    ).sum(0) * self.normalized_joint_gradient_field
+
+    def forward(self, x):
+        return self._project(super().forward(x))
+
+    def adjoint(self, y):
+        return super().adjoint(self._project(y))
