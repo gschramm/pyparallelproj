@@ -17,8 +17,8 @@ import pyparallelproj.subsets as subsets
 
 class LinearOperator(abc.ABC):
 
-    def __init__(self, input_shape: tuple, output_shape: tuple,
-                 xp: types.ModuleType) -> None:
+    def __init__(self, input_shape: tuple[int, ...],
+                 output_shape: tuple[int, ...], xp: types.ModuleType) -> None:
         """Linear operator abstract base class that maps real array x to real array y
 
         Parameters
@@ -96,7 +96,7 @@ class LinearOperator(abc.ABC):
         """
         raise NotImplementedError()
 
-    def adjointness_test(self, verbose=False) -> None:
+    def adjointness_test(self, verbose=False, padwidth=0) -> None:
         """test if adjoint is really the adjoint of forward
 
         Parameters
@@ -104,7 +104,14 @@ class LinearOperator(abc.ABC):
         verbose : bool, optional
             prnt verbose output
         """
-        x = self.xp.random.rand(*self._input_shape).astype(self.xp.float32)
+        if padwidth > 0:
+            x = self.xp.pad(
+                self.xp.random.rand(*tuple(x - 2 * padwidth
+                                           for x in self._input_shape)),
+                padwidth).astype(self.xp.float32)
+        else:
+            x = self.xp.random.rand(*self._input_shape).astype(self.xp.float32)
+
         y = self.xp.random.rand(*self._output_shape).astype(self.xp.float32)
 
         x_fwd = self.forward(x)
@@ -145,7 +152,8 @@ class LinearOperator(abc.ABC):
 
 class LinearSubsetOperator(LinearOperator):
 
-    def __init__(self, input_shape: tuple, output_shape: tuple,
+    def __init__(self, input_shape: tuple[int, ...], output_shape: tuple[int,
+                                                                         ...],
                  xp: types.ModuleType, subsetter: subsets.Subsetter) -> None:
         """Linear operator with subsets abstract base class that maps real array x to real array y
 
@@ -266,3 +274,32 @@ class LinearSubsetOperator(LinearOperator):
             y_back += self.adjoint_subset(y[inds], inds=inds)
 
         return y_back
+
+
+class GradientOperator(LinearOperator):
+    """finite difference gradient operator"""
+
+    def __init__(self, input_shape: tuple[int, ...],
+                 xp: types.ModuleType) -> None:
+
+        output_shape = (len(input_shape), ) + input_shape
+        super().__init__(input_shape, output_shape, xp)
+
+    def forward(self, x):
+        g = self.xp.zeros(self.output_shape, dtype=x.dtype)
+        for i in range(x.ndim):
+            g[i, ...] = self.xp.diff(x,
+                                     axis=i,
+                                     append=self._xp.take(x, [-1], i))
+
+        return g
+
+    def adjoint(self, y):
+        d = self.xp.zeros(self.input_shape, dtype=y.dtype)
+
+        for i in range(y.shape[0]):
+            d -= self.xp.diff(y[i, ...],
+                              axis=i,
+                              prepend=self._xp.take(y[i, ...], [0], i))
+
+        return d
