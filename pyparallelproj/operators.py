@@ -314,9 +314,11 @@ class GradientOperator(LinearOperator):
         d = self.xp.zeros(self.input_shape, dtype=y.dtype)
 
         for i in range(y.shape[0]):
-            d -= self.xp.diff(y[i, ...],
-                              axis=i,
-                              prepend=self._xp.take(y[i, ...], [0], i))
+            tmp = y[i, ...]
+            sl = [slice(None)] * y.shape[0]
+            sl[i] = slice(-1, None)
+            tmp[tuple(sl)] = 0
+            d -= self.xp.diff(tmp, axis=i, prepend=0)
 
         return d
 
