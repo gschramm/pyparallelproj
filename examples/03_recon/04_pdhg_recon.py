@@ -85,6 +85,8 @@ trues_per_volume = 50.
 # global sensitivity factor of the scanner that can be used to
 scanner_sensitivty = 1.
 
+# regularization parameter
+beta = 1e-1
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -218,23 +220,24 @@ prior_operator = operators.GradientOperator(acq_model_recon.input_shape, xp)
 prior_norm = functionals.L2L1Norm(xp)
 
 acq_norm = acq_model_recon.norm()
-sigma = 0.9 / float(acq_norm)
-tau = 0.9 / float(acq_norm)
+gam = 1 / image.max()
+sigma = gam * 0.9 / float(acq_norm)
+tau = 0.9 / float(acq_norm) / gam
 
-beta = 3e-1
+pdhg = algorithms.PDHG(acq_model_recon,
+                       data_distance,
+                       prior_operator,
+                       prior_norm,
+                       beta,
+                       sigma,
+                       tau,
+                       contamination=contamination,
+                       g_functional=functionals.BoundIndicatorFunctional(
+                           xp, lb=0., ub=xp.inf))
 
-reconstructor = algorithms.PDHG(acq_model_recon,
-                                data_distance,
-                                prior_operator,
-                                prior_norm,
-                                beta,
-                                sigma,
-                                tau,
-                                contamination=contamination)
+pdhg.run(num_iterations, calculate_cost=True)
 
-reconstructor.run(num_iterations, calculate_cost=True)
-
-x = reconstructor.x
+x = pdhg.x
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
