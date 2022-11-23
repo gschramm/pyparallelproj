@@ -118,8 +118,8 @@ class NonTOFPETJosephProjector(PETProjector):
 
         image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)
 
-        wrapper.joseph3d_fwd(xstart, xend, x, self.image_origin,
-                             self.voxel_size, image_forward)
+        wrapper.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
+                             self.image_origin, self.voxel_size, image_forward)
 
         return image_forward
 
@@ -140,8 +140,9 @@ class NonTOFPETJosephProjector(PETProjector):
             end_mod, end_ind).astype(self.xp.float32)
 
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-        wrapper.joseph3d_back(xstart, xend, back_image, self.image_origin,
-                              self.voxel_size, y_subset)
+        wrapper.joseph3d_back(xstart, xend, back_image,
+                              self.image_origin, self.voxel_size,
+                              y_subset.astype(self.xp.float32))
 
         return back_image
 
@@ -185,8 +186,8 @@ class TOFPETJosephProjector(PETProjector):
             dtype=self.xp.float32)
 
         wrapper.joseph3d_fwd_tof_sino(
-            xstart, xend, x, self.image_origin, self.voxel_size, image_forward,
-            self.tof_parameters.tofbin_width,
+            xstart, xend, x.astype(self.xp.float32), self.image_origin,
+            self.voxel_size, image_forward, self.tof_parameters.tofbin_width,
             self.xp.array([self.tof_parameters.sigma_tof],
                           dtype=self.xp.float32),
             self.xp.array([self.tof_parameters.tofcenter_offset],
@@ -214,7 +215,7 @@ class TOFPETJosephProjector(PETProjector):
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
         wrapper.joseph3d_back_tof_sino(
             xstart, xend, back_image, self.image_origin, self.voxel_size,
-            y_subset, self.tof_parameters.tofbin_width,
+            y_subset.astype(self.xp.float32), self.tof_parameters.tofbin_width,
             self.xp.array([self.tof_parameters.sigma_tof],
                           dtype=self.xp.float32),
             self.xp.array([self.tof_parameters.tofcenter_offset],
