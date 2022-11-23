@@ -21,6 +21,8 @@ import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.acquisition_models as acquisition_models
 import pyparallelproj.resolution_models as resolution_models
 import pyparallelproj.algorithms as algorithms
+import pyparallelproj.functionals as functionals
+import pyparallelproj.operators as operators
 
 try:
     import cupy as cp
@@ -61,7 +63,7 @@ fwhm_mm_recon = 4.5
 #-------------------
 # image parameters
 
-# brainweb subset number
+# brainweb subject number
 # [4, 5, 6, 18, 20, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54]
 subject_number = 38
 # simulation number [0,1,2]
@@ -73,8 +75,8 @@ sinogram_order = 'RVP'
 
 #-------------------
 # reconstruction parameters
-num_iterations = 6
-num_subsets = 28
+num_iterations = 1000
+num_subsets = 1
 
 # number of true emitted coincidences per volume (mm^3)
 # 5 -> low counts, 5 -> medium counts, 500 -> high counts
@@ -211,11 +213,26 @@ acq_model_recon = acquisition_models.PETAcquisitionModel(
     sensitivity_factors,
     image_based_resolution_model=res_model_recon)
 
-reconstructor = algorithms.OSEM(data,
-                                contamination,
-                                acq_model_recon,
-                                verbose=True)
-reconstructor.run(num_iterations, evaluate_cost=False)
+data_distance = functionals.NegativePoissonLogLikelihood(data, xp)
+prior_operator = operators.GradientOperator(acq_model_recon.input_shape, xp)
+prior_norm = functionals.L2L1Norm(xp)
+
+acq_norm = acq_model_recon.norm()
+sigma = 0.9 / float(acq_norm)
+tau = 0.9 / float(acq_norm)
+
+beta = 3e-1
+
+reconstructor = algorithms.PDHG(acq_model_recon,
+                                data_distance,
+                                prior_operator,
+                                prior_norm,
+                                beta,
+                                sigma,
+                                tau,
+                                contamination=contamination)
+
+reconstructor.run(num_iterations, calculate_cost=True)
 
 x = reconstructor.x
 

@@ -152,7 +152,8 @@ class PDHG:
                  beta: float,
                  sigma: float,
                  tau: float,
-                 theta: float = 0.999):
+                 theta: float = 0.999,
+                 contamination: None | npt.NDArray | cpt.NDArray = None):
         """
         Parameters
         ----------
@@ -172,6 +173,8 @@ class PDHG:
             dual step size 
         theta : float, optional
             theta parameter, by default 0.999
+        contamination : None | npt.NDArray | cpt.NDArray
+            vector of additive contaminations in forward model
         """
 
         self._data_operator = data_operator
@@ -186,10 +189,16 @@ class PDHG:
         self._tau = tau
         self._theta = theta
 
-        self._x = self.xp.zeros(self._data_operator.input_shape)
-        self._xbar = self.xp.zeros(self._data_operator.input_shape)
-        self._y_data = self.xp.zeros(self._data_operator.output_shape)
-        self._y_prior = self.xp.zeros(self._prior_operator.output_shape)
+        self._contamination = contamination
+
+        self._x = self.xp.zeros(self._data_operator.input_shape,
+                                dtype=self.xp.float32)
+        self._xbar = self.xp.zeros(self._data_operator.input_shape,
+                                   dtype=self.xp.float32)
+        self._y_data = self.xp.zeros(self._data_operator.output_shape,
+                                     dtype=self.xp.float32)
+        self._y_prior = self.xp.zeros(self._prior_operator.output_shape,
+                                      dtype=self.xp.float32)
 
         self.setup()
 
@@ -222,10 +231,14 @@ class PDHG:
         return self.cost_data + self.cost_prior
 
     def setup(self) -> None:
-        self._x = self.xp.zeros(self._data_operator.input_shape)
-        self._xbar = self.xp.zeros(self._data_operator.input_shape)
-        self._y_data = self.xp.zeros(self._data_operator.output_shape)
-        self._y_prior = self.xp.zeros(self._prior_operator.output_shape)
+        self._x = self.xp.zeros(self._data_operator.input_shape,
+                                dtype=self.xp.float32)
+        self._xbar = self.xp.zeros(self._data_operator.input_shape,
+                                   dtype=self.xp.float32)
+        self._y_data = self.xp.zeros(self._data_operator.output_shape,
+                                     dtype=self.xp.float32)
+        self._y_prior = self.xp.zeros(self._prior_operator.output_shape,
+                                      dtype=self.xp.float32)
 
         self._epoch_counter = 0
         self._cost_data = []
@@ -233,8 +246,12 @@ class PDHG:
 
     def update(self) -> None:
         # data forward step
-        self._y_data = self._y_data + self._sigma * self._data_operator.forward(
-            self._xbar)
+        xbar_fwd = self._data_operator.forward(self._xbar)
+
+        if self._contamination is not None:
+            xbar_fwd += self._contamination
+
+        self._y_data = self._y_data + self._sigma * xbar_fwd
 
         # prox of data fidelity
         self._y_data = self._data_distance.prox_convex_dual(self._y_data,
@@ -269,8 +286,10 @@ class PDHG:
             if verbose:
                 print(f'iteration {self._epoch_counter}')
             if calculate_cost:
-                self._cost_data.append(
-                    self._data_distance(self._data_operator.forward(self._x)))
+                x_fwd = self._data_operator.forward(self._x)
+                if self._contamination is not None:
+                    x_fwd += self._contamination
+                self._cost_data.append(self._data_distance(x_fwd))
                 self._cost_prior.append(
                     self._beta *
                     self._prior_norm(self._prior_operator.forward(self._x)))

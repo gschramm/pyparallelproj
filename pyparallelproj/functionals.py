@@ -160,4 +160,5 @@ class NegativePoissonLogLikelihood(SmoothDistance):
             sigma: float | npt.NDArray | cpt.NDArray
     ) -> npt.NDArray | cpt.NDArray:
 
-        return 0.5 * (x + 1 - self.xp.sqrt((x - 1)**2 + 4 * sigma * self.y))
+        return 0.5 * (x + 1 - self.xp.sqrt(
+            (x - 1)**2 + 4 * sigma * self.y)).astype(x.dtype)
