@@ -14,9 +14,11 @@ except:
     warnings.warn('cupy module not available')
     import numpy as cp
 
-beta = 3e-1
+beta = 0.3
 xp = np
 n = 20
+lower_bound = 0.
+upper_bound = xp.inf
 num_iter = 10000
 
 noise = 'poisson'
@@ -56,20 +58,32 @@ pdhg = algorithms.PDHG(data_operator,
                        beta,
                        sigma,
                        tau,
-                       contamination=contamination)
+                       contamination=contamination,
+                       g_functional=functionals.BoundIndicatorFunctional(
+                           xp, lb=lower_bound, ub=upper_bound))
 
 pdhg.run(num_iter, calculate_cost=True)
 
 cost_func = lambda x: data_distance(data_operator.forward(
     x) + contamination) + beta * prior_norm(prior_operator.forward(x))
 
-# use powell optimizer as reference
-from scipy.optimize import fmin_powell
+# use SLSQP optimizer stared from PDHG solution to see if we can get a better solution
+from scipy.optimize import minimize, Bounds
 
-res = fmin_powell(cost_func, pdhg.x)
+bounds = Bounds(lb=np.full(x_true.shape, lower_bound),
+                ub=np.full(x_true.shape, upper_bound))
 
-fig, ax = plt.subplots()
-ax.plot(pdhg.x, marker='o')
-ax.plot(res, '.')
+res = minimize(cost_func, pdhg.x, method='SLSQP', bounds=bounds)
+
+print(f'fmin PDHG  ..: {pdhg.cost[-1]}')
+print(f'fmin SLSQP ..: {res.fun}')
+
+fig, ax = plt.subplots(1, 4, figsize=(12, 3))
+it = np.arange(1, num_iter + 1)
+ax[0].plot(pdhg.x, marker='o')
+ax[0].plot(res.x, '.')
+ax[1].plot(it, pdhg.cost)
+ax[2].plot(it[5:200], pdhg.cost[5:200])
+ax[3].plot(it[-1000:], pdhg.cost[-1000:])
 fig.tight_layout()
 fig.show()

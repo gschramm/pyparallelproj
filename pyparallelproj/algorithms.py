@@ -142,28 +142,29 @@ class OSEM:
 
 class PDHG:
     """generic primal-dual hybrid gradient algorithm (Chambolle-Pock) for optimizing
-       data_distance(data_operator x) + beta*(prior_norm(prior_operator x))"""
+       data_distance(data_operator x) + beta*(prior_functional(prior_operator x)) + g_functional(x)"""
 
     def __init__(self,
                  data_operator: operators.LinearOperator,
-                 data_distance: functionals.Distance,
+                 data_distance: functionals.FunctionalWithDualProx,
                  prior_operator: operators.LinearOperator,
-                 prior_norm: functionals.Norm,
+                 prior_functional: functionals.FunctionalWithDualProx,
                  beta: float,
                  sigma: float,
                  tau: float,
                  theta: float = 0.999,
-                 contamination: None | npt.NDArray | cpt.NDArray = None):
+                 contamination: None | npt.NDArray | cpt.NDArray = None,
+                 g_functional: functionals.FunctionalWithProx | None = None):
         """
         Parameters
         ----------
         data_operator : operators.LinearOperator
             operator mapping current image to expected data
-        data_distance : functionals.Distance
+        data_distance : functionals.FunctionalWithDualProx
             norm applied to (expected data - data)
         prior_operator : operators.LinearOperator
             prior operator
-        prior_norm : functionals.Norm
+        prior_functional : functionals.FunctionalWithDualProx
             prior norm
         beta : float
             weight of prior
@@ -173,15 +174,17 @@ class PDHG:
             dual step size 
         theta : float, optional
             theta parameter, by default 0.999
-        contamination : None | npt.NDArray | cpt.NDArray
-            vector of additive contaminations in forward model
+        contamination : None | npt.NDArray | cpt.NDArray, optional
+            vector of additive contaminations in forward model, optional
+        g_functional : None | functionals.FunctionalWithProx
+            the G functional
         """
 
         self._data_operator = data_operator
         self._data_distance = data_distance
 
         self._prior_operator = prior_operator
-        self._prior_norm = prior_norm
+        self._prior_functional = prior_functional
 
         self._beta = beta
 
@@ -190,6 +193,7 @@ class PDHG:
         self._theta = theta
 
         self._contamination = contamination
+        self._g_functional = g_functional
 
         self._x = self.xp.zeros(self._data_operator.input_shape,
                                 dtype=self.xp.float32)
@@ -262,7 +266,7 @@ class PDHG:
             self._y_prior = self._y_prior + self._sigma * self._prior_operator.forward(
                 self._xbar)
             # prox of prior norm
-            self._y_prior = self._beta * self._prior_norm.prox_convex_dual(
+            self._y_prior = self._beta * self._prior_functional.prox_convex_dual(
                 self._y_prior / self._beta, sigma=self._sigma / self._beta)
 
         x_plus = self._x - self._tau * self._data_operator.adjoint(
@@ -270,6 +274,9 @@ class PDHG:
 
         if self._beta > 0:
             x_plus -= self._tau * self._prior_operator.adjoint(self._y_prior)
+
+        if self._g_functional is not None:
+            x_plus = self._g_functional.prox(x_plus, self._tau)
 
         self._xbar = x_plus + self._theta * (x_plus - self._x)
 
@@ -290,6 +297,5 @@ class PDHG:
                 if self._contamination is not None:
                     x_fwd += self._contamination
                 self._cost_data.append(self._data_distance(x_fwd))
-                self._cost_prior.append(
-                    self._beta *
-                    self._prior_norm(self._prior_operator.forward(self._x)))
+                self._cost_prior.append(self._beta * self._prior_functional(
+                    self._prior_operator.forward(self._x)))
