@@ -82,6 +82,18 @@ class PETProjector(operators.LinearSubsetOperator):
 
         return subset_shape
 
+    @abc.abstractmethod
+    def forward_listmode(
+            self, x: npt.NDArray | cpt.NDArray,
+            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def adjoint_listmode(
+            self, y: npt.NDArray | cpt.NDArray,
+            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+        raise NotImplementedError
+
 
 class NonTOFPETJosephProjector(PETProjector):
 
@@ -143,6 +155,37 @@ class NonTOFPETJosephProjector(PETProjector):
         wrapper.joseph3d_back(xstart, xend, back_image,
                               self.image_origin, self.voxel_size,
                               y_subset.astype(self.xp.float32))
+
+        return back_image
+
+    def forward_listmode(
+            self, x: npt.NDArray | cpt.NDArray,
+            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+
+        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 0], events[:, 1]).astype(self.xp.float32)
+        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 2], events[:, 3]).astype(self.xp.float32)
+
+        image_forward = self.xp.zeros(events.shape[0], dtype=self.xp.float32)
+
+        wrapper.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
+                             self.image_origin, self.voxel_size, image_forward)
+
+        return image_forward
+
+    def adjoint_listmode(
+            self, y: npt.NDArray | cpt.NDArray,
+            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+
+        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 0], events[:, 1]).astype(self.xp.float32)
+        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 2], events[:, 3]).astype(self.xp.float32)
+
+        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
+        wrapper.joseph3d_back(xstart, xend, back_image, self.image_origin,
+                              self.voxel_size, y.astype(self.xp.float32))
 
         return back_image
 
@@ -221,5 +264,51 @@ class TOFPETJosephProjector(PETProjector):
             self.xp.array([self.tof_parameters.tofcenter_offset],
                           dtype=self.xp.float32),
             self.tof_parameters.num_sigmas, self.tof_parameters.num_tofbins)
+
+        return back_image
+
+    def forward_listmode(
+            self, x: npt.NDArray | cpt.NDArray,
+            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+
+        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 0], events[:, 1]).astype(self.xp.float32)
+        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 2], events[:, 3]).astype(self.xp.float32)
+        tofbin = events[:, 4].astype(self._xp.int16)
+
+        image_forward = self.xp.zeros(events.shape[0], dtype=self.xp.float32)
+
+        wrapper.joseph3d_fwd_tof_lm(
+            xstart, xend, x.astype(self.xp.float32), self.image_origin,
+            self.voxel_size, image_forward, self.tof_parameters.tofbin_width,
+            self.xp.array([self.tof_parameters.sigma_tof],
+                          dtype=self.xp.float32),
+            self.xp.array([self.tof_parameters.tofcenter_offset],
+                          dtype=self.xp.float32),
+            self.tof_parameters.num_sigmas, tofbin)
+
+        return image_forward
+
+    def adjoint_listmode(
+            self, y: npt.NDArray | cpt.NDArray,
+            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+
+        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 0], events[:, 1]).astype(self.xp.float32)
+        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+            events[:, 2], events[:, 3]).astype(self.xp.float32)
+        tofbin = events[:, 4].astype(self._xp.int16)
+
+        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
+
+        wrapper.joseph3d_back_tof_lm(
+            xstart, xend, back_image, self.image_origin, self.voxel_size,
+            y.astype(self.xp.float32), self.tof_parameters.tofbin_width,
+            self.xp.array([self.tof_parameters.sigma_tof],
+                          dtype=self.xp.float32),
+            self.xp.array([self.tof_parameters.tofcenter_offset],
+                          dtype=self.xp.float32),
+            self.tof_parameters.num_sigmas, tofbin)
 
         return back_image

@@ -485,12 +485,14 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
     def setup_plane_indices(self) -> None:
         """setup the start / end plane indices (similar to a Michelogram)
         """
-        self._start_plane_index = np.arange(self.scanner.num_rings)
-        self._end_plane_index = np.arange(self.scanner.num_rings)
+        self._start_plane_index = np.arange(self.scanner.num_rings,
+                                            dtype=np.int16)
+        self._end_plane_index = np.arange(self.scanner.num_rings,
+                                          dtype=np.int16)
 
         for i in range(1, self.max_ring_difference + 1):
-            tmp1 = np.arange(self.scanner.num_rings - i)
-            tmp2 = np.arange(self.scanner.num_rings - i) + i
+            tmp1 = np.arange(self.scanner.num_rings - i, dtype=np.int16)
+            tmp2 = np.arange(self.scanner.num_rings - i, dtype=np.int16) + i
 
             self._start_plane_index = np.concatenate(
                 (self._start_plane_index, tmp1, tmp2))
