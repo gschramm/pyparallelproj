@@ -20,8 +20,9 @@ except:
 
 #---------------------------------------------------------------------
 
-xp = cp
+xp = np
 num_subsets = 1
+threadsperblock = 64
 
 # image properties
 num_trans = 215
@@ -84,7 +85,9 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                              for i in range(3)],
                             dtype=np.float32)
 
-    print(f'{symmetry_axis, image_shape}  {nevents//1000000}e6 events')
+    print(
+        f'{symmetry_axis, image_shape} {threadsperblock} tpb  {nevents//1000000}e6 events'
+    )
     scanner = scanners.RegularPolygonPETScannerGeometry(
         radius,
         num_sides,
@@ -108,12 +111,20 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
     back_image = xp.zeros(image_shape, dtype=xp.float32)
 
     t0 = time.time()
-    wrapper.joseph3d_back_tof_lm(
-        xstart, xend, image, image_origin, voxel_size, image_fwd,
-        tof_parameters.tofbin_width,
-        xp.array([tof_parameters.sigma_tof], dtype=xp.float32),
-        xp.array([tof_parameters.tofcenter_offset],
-                 dtype=xp.float32), tof_parameters.num_sigmas, tofbin)
+    wrapper.joseph3d_back_tof_lm(xstart,
+                                 xend,
+                                 image,
+                                 image_origin,
+                                 voxel_size,
+                                 image_fwd,
+                                 tof_parameters.tofbin_width,
+                                 xp.array([tof_parameters.sigma_tof],
+                                          dtype=xp.float32),
+                                 xp.array([tof_parameters.tofcenter_offset],
+                                          dtype=xp.float32),
+                                 tof_parameters.num_sigmas,
+                                 tofbin,
+                                 threadsperblock=threadsperblock)
 
     if xp.__name__ == 'cupy':
         cp.cuda.Device().synchronize()
@@ -122,12 +133,20 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
     print(t_fwd[ia])
 
     t2 = time.time()
-    wrapper.joseph3d_back_tof_lm(
-        xstart, xend, back_image, image_origin, voxel_size, y,
-        tof_parameters.tofbin_width,
-        xp.array([tof_parameters.sigma_tof], dtype=xp.float32),
-        xp.array([tof_parameters.tofcenter_offset],
-                 dtype=xp.float32), tof_parameters.num_sigmas, tofbin)
+    wrapper.joseph3d_back_tof_lm(xstart,
+                                 xend,
+                                 back_image,
+                                 image_origin,
+                                 voxel_size,
+                                 y,
+                                 tof_parameters.tofbin_width,
+                                 xp.array([tof_parameters.sigma_tof],
+                                          dtype=xp.float32),
+                                 xp.array([tof_parameters.tofcenter_offset],
+                                          dtype=xp.float32),
+                                 tof_parameters.num_sigmas,
+                                 tofbin,
+                                 threadsperblock=threadsperblock)
 
     if xp.__name__ == 'cupy':
         cp.cuda.Device().synchronize()
