@@ -403,14 +403,14 @@ class LinearListmodeSubsetOperator(LinearSubsetOperator):
     @abc.abstractmethod
     def forward_listmode_subset(
             self, x: npt.NDArray | cpt.NDArray,
-            inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
         """evaluate the operator for a given subset
 
         Parameters
         ----------
         x : npt.NDArray | cpt.NDArray
             the input array
-        inds : slice | npt.NDArray, optional
+        subset_inds : slice | npt.NDArray, optional
             the subset is by and index array or a slice
 
         Returns
@@ -424,14 +424,14 @@ class LinearListmodeSubsetOperator(LinearSubsetOperator):
     @abc.abstractmethod
     def adjoint_listmode_subset(
             self, y_subset: npt.NDArray | cpt.NDArray,
-            inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
         """adjoint of the operator for a given subset
 
         Parameters
         ----------
         y_subset : npt.NDArray | cpt.NDArray
             subset of y for the evaluation
-        inds : slice | npt.NDArray, optional
+        subset_inds : slice | npt.NDArray, optional
             the subset is by and index array or a slice
 
         Returns
