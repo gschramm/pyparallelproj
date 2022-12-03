@@ -32,16 +32,7 @@ num_ax = 71
 voxel_size = np.array([2.78, 2.78, 2.78], dtype=np.float32)
 
 # scanner properties
-radius = 0.5 * (744.1 + 2 * 8.51)
-num_sides = 34
-num_lor_endpoints_per_side = 16
-lor_spacing = 4.03125
 num_rings = 36
-ring_positions = 5.31556 * np.arange(num_rings) + (np.arange(num_rings) //
-                                                   9) * 2.8
-ring_positions -= 0.5 * ring_positions.max()
-
-radial_trim = 65
 
 # tof parameters
 speed_of_light = 300.  # [mm/ns]
@@ -54,6 +45,7 @@ tof_parameters = tof.TOFParameters(
     num_sigmas=3)
 
 #---------------------------------------------------------------------
+radial_trim = 65
 sinogram_orders = ('PVR', 'PRV', 'VPR', 'VRP', 'RPV', 'RVP')
 symmetry_axes = (0, 1, 2)
 
@@ -62,15 +54,9 @@ df_back = pd.DataFrame()
 
 for io, sinogram_order in enumerate(sinogram_orders):
     for ia, symmetry_axis in enumerate(symmetry_axes):
-        scanner = scanners.RegularPolygonPETScannerGeometry(
-            radius,
-            num_sides,
-            num_lor_endpoints_per_side,
-            lor_spacing,
-            num_rings,
-            ring_positions,
-            symmetry_axis=symmetry_axis,
-            xp=xp)
+        scanner = scanners.GEDiscoveryMI(num_rings,
+                                         symmetry_axis=symmetry_axis,
+                                         xp=xp)
 
         # setup the coincidence descriptor
         cd = coincidences.RegularPolygonPETCoincidenceDescriptor(
@@ -92,9 +78,7 @@ for io, sinogram_order in enumerate(sinogram_orders):
 
         # setup a box like test image
         img_shape = [num_trans, num_trans, num_trans]
-        img_shape[symmetry_axis] = max(
-            int((ring_positions.max() - ring_positions.min()) /
-                voxel_size[symmetry_axis]), 1)
+        img_shape[symmetry_axis] = num_ax
         img_shape = tuple(img_shape)
         n0, n1, n2 = img_shape
 

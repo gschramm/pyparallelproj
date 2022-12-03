@@ -293,3 +293,23 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
     def num_lor_endpoints_per_ring(self) -> int:
         """the number of LOR endpoints per ring (regular polygon)"""
         return self._num_lor_endpoints_per_module[0]
+
+
+class GEDiscoveryMI(RegularPolygonPETScannerGeometry):
+
+    def __init__(self,
+                 num_rings: int = 36,
+                 symmetry_axis: int = 2,
+                 xp: types.ModuleType = np):
+
+        ring_positions = 5.31556 * np.arange(num_rings) + (
+            np.arange(num_rings) // 9) * 2.8
+        ring_positions -= 0.5 * ring_positions.max()
+        super().__init__(radius=0.5 * (744.1 + 2 * 8.51),
+                         num_sides=34,
+                         num_lor_endpoints_per_side=16,
+                         lor_spacing=4.03125,
+                         num_rings=num_rings,
+                         ring_positions=ring_positions,
+                         symmetry_axis=symmetry_axis,
+                         xp=xp)
