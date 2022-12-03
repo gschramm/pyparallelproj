@@ -28,11 +28,6 @@ class ModularizedPETScannerGeometry:
             module indicating whether to store all LOR endpoints as numpy as cupy array
             default None means that numpy is used
         """
-        self._modules = modules
-        self._num_modules = len(self._modules)
-        self._num_lor_endpoints_per_module = np.array(
-            [x.num_lor_endpoints for x in self._modules])
-        self._num_lor_endpoints = self._num_lor_endpoints_per_module.sum()
 
         # member variable that determines whether we want to use
         # a numpy or cupy array to store the array of all lor endpoints
@@ -41,6 +36,11 @@ class ModularizedPETScannerGeometry:
         else:
             self._xp = xp
 
+        self._modules = modules
+        self._num_modules = len(self._modules)
+        self._num_lor_endpoints_per_module = self._xp.array(
+            [x.num_lor_endpoints for x in self._modules])
+        self._num_lor_endpoints = self._num_lor_endpoints_per_module.sum()
         if self._xp.__name__ not in ['numpy', 'cupy']:
             raise ValueError('xp must be numpy or cupy module')
 
@@ -51,15 +51,16 @@ class ModularizedPETScannerGeometry:
            the modules and calculating the transformed coordinates of all
            module endpoints
         """
-        self._all_lor_endpoints_index_offset = np.cumsum(
-            np.pad(self._num_lor_endpoints_per_module,
-                   (1, 0)))[:self._num_modules]
+        self._all_lor_endpoints_index_offset = self._xp.cumsum(
+            self._xp.pad(self._num_lor_endpoints_per_module,
+                         (1, 0)))[:self._num_modules]
 
         self._all_lor_endpoints = self._xp.vstack(
             [x.get_lor_endpoints() for x in self._modules])
 
-        self._all_lor_endpoints_module_number = np.repeat(
-            np.arange(self._num_modules), self._num_lor_endpoints_per_module)
+        self._all_lor_endpoints_module_number = self._xp.repeat(
+            self._xp.arange(self._num_modules),
+            self._num_lor_endpoints_per_module.tolist())
 
     @property
     def modules(self) -> tuple[mods.PETScannerModule]:
@@ -72,7 +73,7 @@ class ModularizedPETScannerGeometry:
         return self._num_modules
 
     @property
-    def num_lor_endpoints_per_module(self) -> npt.NDArray:
+    def num_lor_endpoints_per_module(self) -> npt.NDArray | cpt.NDArray:
         """numpy array showing how many LOR endpoints are in every module"""
         return self._num_lor_endpoints_per_module
 
@@ -82,12 +83,12 @@ class ModularizedPETScannerGeometry:
         return self._num_lor_endpoints
 
     @property
-    def all_lor_endpoints_index_offset(self) -> npt.NDArray:
+    def all_lor_endpoints_index_offset(self) -> npt.NDArray | cpt.NDArray:
         """the offset in the linear (flattend) index for all LOR endpoints"""
         return self._all_lor_endpoints_index_offset
 
     @property
-    def all_lor_endpoints_module_number(self) -> npt.NDArray:
+    def all_lor_endpoints_module_number(self) -> npt.NDArray | cpt.NDArray:
         """the module number of all LOR endpoints"""
         return self._all_lor_endpoints_module_number
 
@@ -107,8 +108,10 @@ class ModularizedPETScannerGeometry:
         self._xp = value
         self.setup_all_lor_endpoints()
 
-    def linear_lor_endpoint_index(self, module: npt.NDArray,
-                                  index_in_module: npt.NDArray) -> npt.NDArray:
+    def linear_lor_endpoint_index(
+        self, module: npt.NDArray | cpt.NDArray,
+        index_in_module: npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
         """transform the module + index_in_modules indices into a flattened / linear LOR endpoint index
 
         Parameters
@@ -123,6 +126,10 @@ class ModularizedPETScannerGeometry:
         npt.NDArray
             the flattened LOR endpoint index
         """
+        if (self._xp.__name__ == 'cupy') and isinstance(
+                index_in_module, np.ndarray):
+            index_in_module = self._xp.asarray(index_in_module)
+
         return self.all_lor_endpoints_index_offset[module] + index_in_module
 
     def get_lor_endpoints(
@@ -244,7 +251,7 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
         modules = tuple(modules)
         super().__init__(modules, xp)
 
-        self._all_lor_endpoints_index_in_ring = np.arange(
+        self._all_lor_endpoints_index_in_ring = self._xp.arange(
             self.num_lor_endpoints
         ) - self.all_lor_endpoints_ring_number * self.num_lor_endpoints_per_module[
             0]
@@ -292,7 +299,7 @@ class RegularPolygonPETScannerGeometry(ModularizedPETScannerGeometry):
     @property
     def num_lor_endpoints_per_ring(self) -> int:
         """the number of LOR endpoints per ring (regular polygon)"""
-        return self._num_lor_endpoints_per_module[0]
+        return int(self._num_lor_endpoints_per_module[0])
 
 
 class GEDiscoveryMI(RegularPolygonPETScannerGeometry):

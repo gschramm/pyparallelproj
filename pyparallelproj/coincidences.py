@@ -80,7 +80,7 @@ class PETCoincidenceDescriptor(abc.ABC):
     @abc.abstractmethod
     def get_lor_indices(
         self,
-        linear_lor_indices: None | npt.NDArray = None
+        linear_lor_indices: None | slice | npt.NDArray = None
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
         """ mapping that maps the linear LOR index to the 4 1D arrays
             representing start_module, start_index_in_module, end_module,
@@ -88,7 +88,7 @@ class PETCoincidenceDescriptor(abc.ABC):
 
         Parameters
         ----------
-        linear_lor_indices : None | npt.NDArray, optional
+        linear_lor_indices : None | slice | npt.NDArray, optional
             containing the linear (flattened) indices of geometrical LORs, by default None
 
         Returns
@@ -232,10 +232,15 @@ class GenericPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
     def get_lor_indices(
         self,
-        linear_lor_indices: None | npt.NDArray = None
+        linear_lor_indices: None | slice | npt.NDArray = None
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
+
         if linear_lor_indices is None:
             linear_lor_indices = np.arange(self.num_lors)
+        elif isinstance(linear_lor_indices, slice):
+            linear_lor_indices = np.arange(self.num_lors)[linear_lor_indices]
+        else:
+            raise ValueError
 
         start_inds = self._lor_start_module_index[linear_lor_indices]
         end_inds = self._lor_end_module_index[linear_lor_indices]
@@ -402,11 +407,17 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
 
     def get_lor_indices(
         self,
-        linear_lor_indices: None | npt.NDArray = None
+        linear_lor_indices: None | slice | npt.NDArray = None
     ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
 
         if linear_lor_indices is None:
             linear_lor_indices = np.arange(self.num_lors)
+        elif isinstance(linear_lor_indices, slice):
+            linear_lor_indices = np.arange(self.num_lors)[linear_lor_indices]
+        elif isinstance(linear_lor_indices, np.ndarray):
+            pass
+        else:
+            raise ValueError
 
         if self.sinogram_spatial_axis_order is SinogramSpatialAxisOrder.RVP:
             radial_elements, views, planes = np.unravel_index(

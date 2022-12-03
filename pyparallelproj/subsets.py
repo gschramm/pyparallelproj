@@ -1,5 +1,6 @@
 """module for defining classes related to data subsetting"""
 import abc
+import math
 
 import numpy as np
 import numpy.typing as npt
@@ -17,7 +18,7 @@ class Subsetter(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_subset_indices(self, subset: int) -> npt.NDArray:
+    def get_subset_indices(self, subset: int) -> npt.NDArray | slice:
         """get the indices along the subset axis (left most axis) belonging to a given subset
 
         Parameters
@@ -27,7 +28,7 @@ class Subsetter(abc.ABC):
 
         Returns
         -------
-        npt.NDArray
+        npt.NDArray | slice
             of indices
         """
         raise NotImplementedError
@@ -47,6 +48,45 @@ class Subsetter(abc.ABC):
             length of the subset index array
         """
         raise NotImplementedError
+
+
+class Strided1DSubsetter(Subsetter):
+
+    def __init__(self, num_elements: int, num_subsets: int) -> None:
+        """split a 1D array into num_subsets into n strided subsets
+
+        Parameters
+        ----------
+        num_elements : int
+            total size of the 1D array
+        num_subsets : int
+            number of subsets
+        """
+
+        self._num_elements = num_elements
+        self._num_subsets = num_subsets
+
+    @property
+    def num_subsets(self) -> int:
+        return self._num_subsets
+
+    @num_subsets.setter
+    def num_subsets(self, value: int) -> None:
+        self._num_subsets = value
+
+    @property
+    def num_elements(self) -> int:
+        return self._num_elements
+
+    @num_elements.setter
+    def num_elements(self, value: int) -> None:
+        self._num_elements = value
+
+    def get_subset_indices(self, subset: int) -> npt.NDArray | slice:
+        return slice(subset, None, self._num_subsets)
+
+    def get_subset_index_len(self, subset: int) -> int:
+        return math.ceil((self._num_elements - subset) / self.num_subsets)
 
 
 class RandomLORSubsetter(Subsetter):

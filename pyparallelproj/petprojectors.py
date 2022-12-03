@@ -16,7 +16,7 @@ except:
     import numpy.typing as cpt
 
 
-class PETProjector(operators.LinearSubsetOperator):
+class PETProjector(operators.LinearListmodeSubsetOperator):
     """
     Abstract base class for NonTOF and TOF PET projectors
     """
@@ -26,14 +26,13 @@ class PETProjector(operators.LinearSubsetOperator):
                  image_shape: tuple[int, int, int],
                  image_origin: tuple[float, float, float],
                  voxel_size: tuple[float, float, float],
-                 subsetter: subsets.Subsetter,
+                 subsetter: subsets.Subsetter | None = None,
                  tof_parameters: tof.TOFParameters | None = None) -> None:
 
         self._coincidence_descriptor = coincidence_descriptor
         self._image_shape = image_shape
         self._image_origin = image_origin
         self._voxel_size = voxel_size
-        self._subsetter = subsetter
         self._tof_parameters = tof_parameters
 
         if self.tof:
@@ -62,10 +61,6 @@ class PETProjector(operators.LinearSubsetOperator):
         return self.xp.array(self._voxel_size, dtype=self.xp.float32)
 
     @property
-    def subsetter(self) -> subsets.Subsetter:
-        return self._subsetter
-
-    @property
     def tof_parameters(self) -> tof.TOFParameters | None:
         return self._tof_parameters
 
@@ -82,47 +77,15 @@ class PETProjector(operators.LinearSubsetOperator):
 
         return subset_shape
 
-    @abc.abstractmethod
-    def forward_listmode(
-            self, x: npt.NDArray | cpt.NDArray,
-            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def adjoint_listmode(
-            self, y: npt.NDArray | cpt.NDArray,
-            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-        raise NotImplementedError
-
 
 class NonTOFPETJosephProjector(PETProjector):
 
-    def __init__(self,
-                 coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
-                 image_shape: tuple[int, int, int],
-                 image_origin: tuple[float, float,
-                                     float], voxel_size: tuple[float, float,
-                                                               float],
-                 subsetter: subsets.Subsetter) -> None:
-
-        super().__init__(coincidence_descriptor,
-                         image_shape,
-                         image_origin,
-                         voxel_size,
-                         subsetter,
-                         tof_parameters=None)
-
     def forward_subset(
-            self,
-            x: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
-
-        if inds is None:
-            inds = self.subsetter.get_subset_indices(subset)
+            self, x: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
         start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            inds)
+            subset_inds)
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
             start_mod, start_ind).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
@@ -136,16 +99,11 @@ class NonTOFPETJosephProjector(PETProjector):
         return image_forward
 
     def adjoint_subset(
-            self,
-            y_subset: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
-
-        if inds is None:
-            inds = self.subsetter.get_subset_indices(subset)
+            self, y_subset: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
         start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            inds)
+            subset_inds)
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
             start_mod, start_ind).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
@@ -158,157 +116,168 @@ class NonTOFPETJosephProjector(PETProjector):
 
         return back_image
 
-    def forward_listmode(
+    def forward_listmode_subset(
             self, x: npt.NDArray | cpt.NDArray,
-            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 0], events[:, 1]).astype(self.xp.float32)
+            self.events[subset_inds, 0],
+            self.events[subset_inds, 1]).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 2], events[:, 3]).astype(self.xp.float32)
+            self.events[subset_inds, 2],
+            self.events[subset_inds, 3]).astype(self.xp.float32)
 
-        image_forward = self.xp.zeros(events.shape[0], dtype=self.xp.float32)
+        image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)
 
         wrapper.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
                              self.image_origin, self.voxel_size, image_forward)
 
         return image_forward
 
-    def adjoint_listmode(
-            self, y: npt.NDArray | cpt.NDArray,
-            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+    def adjoint_listmode_subset(
+            self, y_subset: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
         xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 0], events[:, 1]).astype(self.xp.float32)
+            self.events[subset_inds, 0],
+            self.events[subset_inds, 1]).astype(self.xp.float32)
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 2], events[:, 3]).astype(self.xp.float32)
+            self.events[subset_inds, 2],
+            self.events[subset_inds, 3]).astype(self.xp.float32)
 
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-        wrapper.joseph3d_back(xstart, xend, back_image, self.image_origin,
-                              self.voxel_size, y.astype(self.xp.float32))
+        wrapper.joseph3d_back(xstart, xend, back_image,
+                              self.image_origin, self.voxel_size,
+                              y_subset.astype(self.xp.float32))
 
         return back_image
 
 
-class TOFPETJosephProjector(PETProjector):
-
-    def __init__(self,
-                 coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
-                 image_shape: tuple[int, int,
-                                    int], image_origin: tuple[float, float,
-                                                              float],
-                 voxel_size: tuple[float, float,
-                                   float], subsetter: subsets.Subsetter,
-                 tof_parameters: tof.TOFParameters) -> None:
-
-        super().__init__(coincidence_descriptor,
-                         image_shape,
-                         image_origin,
-                         voxel_size,
-                         subsetter,
-                         tof_parameters=tof_parameters)
-
-    def forward_subset(
-            self,
-            x: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
-
-        if inds is None:
-            inds = self.subsetter.get_subset_indices(subset)
-
-        start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            inds)
-        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            start_mod, start_ind).astype(self.xp.float32)
-        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            end_mod, end_ind).astype(self.xp.float32)
-
-        image_forward = self.xp.zeros(
-            (xstart.shape[0], self.tof_parameters.num_tofbins),
-            dtype=self.xp.float32)
-
-        wrapper.joseph3d_fwd_tof_sino(
-            xstart, xend, x.astype(self.xp.float32), self.image_origin,
-            self.voxel_size, image_forward, self.tof_parameters.tofbin_width,
-            self.xp.array([self.tof_parameters.sigma_tof],
-                          dtype=self.xp.float32),
-            self.xp.array([self.tof_parameters.tofcenter_offset],
-                          dtype=self.xp.float32),
-            self.tof_parameters.num_sigmas, self.tof_parameters.num_tofbins)
-
-        return image_forward
-
-    def adjoint_subset(
-            self,
-            y_subset: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
-
-        if inds is None:
-            inds = self.subsetter.get_subset_indices(subset)
-
-        start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
-            inds)
-        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            start_mod, start_ind).astype(self.xp.float32)
-        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            end_mod, end_ind).astype(self.xp.float32)
-
-        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-        wrapper.joseph3d_back_tof_sino(
-            xstart, xend, back_image, self.image_origin, self.voxel_size,
-            y_subset.astype(self.xp.float32), self.tof_parameters.tofbin_width,
-            self.xp.array([self.tof_parameters.sigma_tof],
-                          dtype=self.xp.float32),
-            self.xp.array([self.tof_parameters.tofcenter_offset],
-                          dtype=self.xp.float32),
-            self.tof_parameters.num_sigmas, self.tof_parameters.num_tofbins)
-
-        return back_image
-
-    def forward_listmode(
-            self, x: npt.NDArray | cpt.NDArray,
-            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 0], events[:, 1]).astype(self.xp.float32)
-        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 2], events[:, 3]).astype(self.xp.float32)
-        tofbin = events[:, 4].astype(self._xp.int16)
-
-        image_forward = self.xp.zeros(events.shape[0], dtype=self.xp.float32)
-
-        wrapper.joseph3d_fwd_tof_lm(
-            xstart, xend, x.astype(self.xp.float32), self.image_origin,
-            self.voxel_size, image_forward, self.tof_parameters.tofbin_width,
-            self.xp.array([self.tof_parameters.sigma_tof],
-                          dtype=self.xp.float32),
-            self.xp.array([self.tof_parameters.tofcenter_offset],
-                          dtype=self.xp.float32),
-            self.tof_parameters.num_sigmas, tofbin)
-
-        return image_forward
-
-    def adjoint_listmode(
-            self, y: npt.NDArray | cpt.NDArray,
-            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
-
-        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 0], events[:, 1]).astype(self.xp.float32)
-        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            events[:, 2], events[:, 3]).astype(self.xp.float32)
-        tofbin = events[:, 4].astype(self._xp.int16)
-
-        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
-
-        wrapper.joseph3d_back_tof_lm(
-            xstart, xend, back_image, self.image_origin, self.voxel_size,
-            y.astype(self.xp.float32), self.tof_parameters.tofbin_width,
-            self.xp.array([self.tof_parameters.sigma_tof],
-                          dtype=self.xp.float32),
-            self.xp.array([self.tof_parameters.tofcenter_offset],
-                          dtype=self.xp.float32),
-            self.tof_parameters.num_sigmas, tofbin)
-
-        return back_image
+#class TOFPETJosephProjector(PETProjector):
+#
+#    def __init__(self,
+#                 coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
+#                 image_shape: tuple[int, int,
+#                                    int], image_origin: tuple[float, float,
+#                                                              float],
+#                 voxel_size: tuple[float, float,
+#                                   float], subsetter: subsets.Subsetter,
+#                 tof_parameters: tof.TOFParameters) -> None:
+#
+#        super().__init__(coincidence_descriptor,
+#                         image_shape,
+#                         image_origin,
+#                         voxel_size,
+#                         subsetter,
+#                         tof_parameters=tof_parameters)
+#
+#    def forward_subset(
+#            self,
+#            x: npt.NDArray | cpt.NDArray,
+#            subset: int = 0,
+#            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+#
+#        if inds is None:
+#            inds = self.subsetter.get_subset_indices(subset)
+#
+#        start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
+#            inds)
+#        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            start_mod, start_ind).astype(self.xp.float32)
+#        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            end_mod, end_ind).astype(self.xp.float32)
+#
+#        image_forward = self.xp.zeros(
+#            (xstart.shape[0], self.tof_parameters.num_tofbins),
+#            dtype=self.xp.float32)
+#
+#        wrapper.joseph3d_fwd_tof_sino(
+#            xstart, xend, x.astype(self.xp.float32), self.image_origin,
+#            self.voxel_size, image_forward, self.tof_parameters.tofbin_width,
+#            self.xp.array([self.tof_parameters.sigma_tof],
+#                          dtype=self.xp.float32),
+#            self.xp.array([self.tof_parameters.tofcenter_offset],
+#                          dtype=self.xp.float32),
+#            self.tof_parameters.num_sigmas, self.tof_parameters.num_tofbins)
+#
+#        return image_forward
+#
+#    def adjoint_subset(
+#            self,
+#            y_subset: npt.NDArray | cpt.NDArray,
+#            subset: int = 0,
+#            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+#
+#        if inds is None:
+#            inds = self.subsetter.get_subset_indices(subset)
+#
+#        start_mod, start_ind, end_mod, end_ind = self.coincidence_descriptor.get_lor_indices(
+#            inds)
+#        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            start_mod, start_ind).astype(self.xp.float32)
+#        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            end_mod, end_ind).astype(self.xp.float32)
+#
+#        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
+#        wrapper.joseph3d_back_tof_sino(
+#            xstart, xend, back_image, self.image_origin, self.voxel_size,
+#            y_subset.astype(self.xp.float32), self.tof_parameters.tofbin_width,
+#            self.xp.array([self.tof_parameters.sigma_tof],
+#                          dtype=self.xp.float32),
+#            self.xp.array([self.tof_parameters.tofcenter_offset],
+#                          dtype=self.xp.float32),
+#            self.tof_parameters.num_sigmas, self.tof_parameters.num_tofbins)
+#
+#        return back_image
+#
+#    def forward_listmode_subset(
+#            self,
+#            x: npt.NDArray | cpt.NDArray,
+#            subset: int = 0,
+#            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+#
+#        if inds is None:
+#            inds = self.subsetter.get_subset_indices(subset)
+#
+#        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            self._events[:, 0], self._events[:, 1]).astype(self.xp.float32)
+#        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            self._events[:, 2], self._events[:, 3]).astype(self.xp.float32)
+#        tofbin = self._events[:, 4].astype(self._xp.int16)
+#
+#        image_forward = self.xp.zeros(events.shape[0], dtype=self.xp.float32)
+#
+#        wrapper.joseph3d_fwd_tof_lm(
+#            xstart, xend, x.astype(self.xp.float32), self.image_origin,
+#            self.voxel_size, image_forward, self.tof_parameters.tofbin_width,
+#            self.xp.array([self.tof_parameters.sigma_tof],
+#                          dtype=self.xp.float32),
+#            self.xp.array([self.tof_parameters.tofcenter_offset],
+#                          dtype=self.xp.float32),
+#            self.tof_parameters.num_sigmas, tofbin)
+#
+#        return image_forward
+#
+#    def adjoint_listmode(
+#            self, y: npt.NDArray | cpt.NDArray,
+#            events: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
+#
+#        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            events[:, 0], events[:, 1]).astype(self.xp.float32)
+#        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
+#            events[:, 2], events[:, 3]).astype(self.xp.float32)
+#        tofbin = events[:, 4].astype(self._xp.int16)
+#
+#        back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
+#
+#        wrapper.joseph3d_back_tof_lm(
+#            xstart, xend, back_image, self.image_origin, self.voxel_size,
+#            y.astype(self.xp.float32), self.tof_parameters.tofbin_width,
+#            self.xp.array([self.tof_parameters.sigma_tof],
+#                          dtype=self.xp.float32),
+#            self.xp.array([self.tof_parameters.tofcenter_offset],
+#                          dtype=self.xp.float32),
+#            self.tof_parameters.num_sigmas, tofbin)
+#
+#        return back_image
+#
