@@ -107,7 +107,7 @@ for io, sinogram_order in enumerate(sinogram_orders):
         print(cd.sinogram_spatial_axis_order.name)
         print(symmetry_axis, img_shape)
 
-        for ir in range(num_runs):
+        for ir in range(num_runs + 1):
             # perform a complete fwd projection
             t0 = time.time()
             ppw.joseph3d_fwd(xstart,
@@ -120,15 +120,16 @@ for io, sinogram_order in enumerate(sinogram_orders):
             if xp.__name__ == 'cupy':
                 cp.cuda.Device().synchronize()
             t1 = time.time()
-            tmp = pd.DataFrame(
-                {
-                    'sinogram order': cd.sinogram_spatial_axis_order.name,
-                    'symmetry axis': symmetry_axis,
-                    'run': ir,
-                    'time (s)': t1 - t0
-                },
-                index=[0])
-            df_fwd = pd.concat((df_fwd, tmp))
+            if ir > 0:
+                tmp = pd.DataFrame(
+                    {
+                        'sinogram order': cd.sinogram_spatial_axis_order.name,
+                        'symmetry axis': symmetry_axis,
+                        'run': ir,
+                        'time (s)': t1 - t0
+                    },
+                    index=[0])
+                df_fwd = pd.concat((df_fwd, tmp))
 
             # perform a complete backprojection
             back_img = xp.zeros(img.shape, dtype=xp.float32)
@@ -144,15 +145,16 @@ for io, sinogram_order in enumerate(sinogram_orders):
             if xp.__name__ == 'cupy':
                 cp.cuda.Device().synchronize()
             t3 = time.time()
-            tmp = pd.DataFrame(
-                {
-                    'sinogram order': cd.sinogram_spatial_axis_order.name,
-                    'symmetry axis': symmetry_axis,
-                    'run': ir,
-                    'time (s)': t3 - t2
-                },
-                index=[0])
-            df_back = pd.concat((df_back, tmp))
+            if ir > 0:
+                tmp = pd.DataFrame(
+                    {
+                        'sinogram order': cd.sinogram_spatial_axis_order.name,
+                        'symmetry axis': symmetry_axis,
+                        'run': ir,
+                        'time (s)': t3 - t2
+                    },
+                    index=[0])
+                df_back = pd.concat((df_back, tmp))
 
             img_fwd = img_fwd.reshape(subsetter.get_sinogram_subset_shape(0))
             if xp.__name__ == 'cupy':

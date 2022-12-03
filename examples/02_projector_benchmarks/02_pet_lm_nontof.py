@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 import h5py
+import pandas as pd
+import seaborn as sns
 
 import time
 
@@ -21,6 +23,8 @@ except:
 
 xp = np
 
+num_runs = 10
+nevents = 10000000
 num_subsets = 1
 threadsperblock = 64
 
@@ -42,8 +46,8 @@ ring_positions -= 0.5 * ring_positions.max()
 #---------------------------------------------------------------------
 symmetry_axes = (0, 1, 2)
 
-t_fwd = np.zeros(len(symmetry_axes))
-t_back = np.zeros(len(symmetry_axes))
+df_fwd = pd.DataFrame()
+df_back = pd.DataFrame()
 
 #---------------------------------------------------------------------
 # load listmode data
@@ -53,7 +57,8 @@ with open('.nema_data.json', 'r') as jfile:
 with h5py.File(data_path / 'LIST0000.BLF', 'r') as data:
     events = data['MiceList/TofCoinc'][:]
 
-nevents = events.shape[0]
+if nevents is None:
+    nevents = events.shape[0]
 
 # shuffle events since events come semi sorted
 print('shuffling LM data')
@@ -98,50 +103,68 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
     image_fwd = xp.zeros(nevents, dtype=xp.float32)
     back_image = xp.zeros(image_shape, dtype=xp.float32)
 
-    t0 = time.time()
-    wrapper.joseph3d_fwd(xstart,
-                         xend,
-                         image,
-                         image_origin,
-                         voxel_size,
-                         image_fwd,
-                         threadsperblock=threadsperblock)
+    for ir in range(num_runs + 1):
+        t0 = time.time()
+        wrapper.joseph3d_fwd(xstart,
+                             xend,
+                             image,
+                             image_origin,
+                             voxel_size,
+                             image_fwd,
+                             threadsperblock=threadsperblock)
 
-    if xp.__name__ == 'cupy':
-        cp.cuda.Device().synchronize()
-    t1 = time.time()
-    t_fwd[ia] = t1 - t0
-    print(t_fwd[ia])
+        if xp.__name__ == 'cupy':
+            cp.cuda.Device().synchronize()
+        t1 = time.time()
+        if ir > 0:
+            tmp = pd.DataFrame(
+                {
+                    'symmetry axis': symmetry_axis,
+                    'run': ir,
+                    'time (s)': t1 - t0
+                },
+                index=[0])
+            df_fwd = pd.concat((df_fwd, tmp))
 
-    t2 = time.time()
-    wrapper.joseph3d_back(xstart,
-                          xend,
-                          back_image,
-                          image_origin,
-                          voxel_size,
-                          y,
-                          threadsperblock=threadsperblock)
+        t2 = time.time()
+        wrapper.joseph3d_back(xstart,
+                              xend,
+                              back_image,
+                              image_origin,
+                              voxel_size,
+                              y,
+                              threadsperblock=threadsperblock)
 
-    if xp.__name__ == 'cupy':
-        cp.cuda.Device().synchronize()
-    t3 = time.time()
-    t_back[ia] = t3 - t2
-    print(t_back[ia])
-
-t_total = t_fwd + t_back
+        if xp.__name__ == 'cupy':
+            cp.cuda.Device().synchronize()
+        t3 = time.time()
+        if ir > 0:
+            tmp = pd.DataFrame(
+                {
+                    'symmetry axis': symmetry_axis,
+                    'run': ir,
+                    'time (s)': t3 - t2
+                },
+                index=[0])
+            df_back = pd.concat((df_back, tmp))
 
 #---------------------------------------------------------------------
 # plots
 
-fig, ax = plt.subplots(1, 1, figsize=(4, 4), sharex=True, sharey=True)
-ax.plot(t_fwd, 'o', label='forward')
-ax.plot(t_back, 'o', label='back')
-ax.plot(t_total, 'o', label='forward + back')
+df_sum = df_fwd.copy()
+df_sum['time (s)'] = df_fwd['time (s)'] + df_back['time (s)']
 
-ax.grid(ls=':')
-ax.legend()
-ax.set_ylabel('time (s)')
-ax.set_xlabel('symmetry axis')
+fig, ax = plt.subplots(1, 3, figsize=(3 * 4, 4), sharex=True, sharey=True)
+sns.barplot(data=df_fwd, x='symmetry axis', y='time (s)', ax=ax[0])
+sns.barplot(data=df_back, x='symmetry axis', y='time (s)', ax=ax[1])
+sns.barplot(data=df_sum, x='symmetry axis', y='time (s)', ax=ax[2])
+
+ax[0].set_title('forward projection')
+ax[1].set_title('back projection')
+ax[2].set_title('forward + back projection')
+
+for axx in ax.ravel():
+    axx.grid(ls=':')
 
 fig.tight_layout()
 fig.show()
