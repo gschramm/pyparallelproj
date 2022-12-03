@@ -94,18 +94,22 @@ class OSEM:
 
             self._adjoint_ones[subset,
                                ...] = self.acquisition_model.adjoint_subset(
-                                   ones, subset)
+                                   ones,
+                                   self.acquisition_model.subsetter.
+                                   get_subset_indices(subset))
 
     def subset_update(self, subset: int) -> None:
         # get the LOR indices belonging to the current subset
-        inds = self.acquisition_model.subsetter.get_subset_indices(subset)
+        subset_inds = self.acquisition_model.subsetter.get_subset_indices(
+            subset)
         # calculate the expected data given the current reconstruction
         expected_data = self.acquisition_model.forward_subset(
-            self._x, inds=inds) + self._contamination[inds]
+            self._x, subset_inds) + self._contamination[subset_inds]
         # ratio of measured data and expected data
-        ratio = (self._data[inds] / expected_data).astype(self.xp.float32)
+        ratio = (self._data[subset_inds] / expected_data).astype(
+            self.xp.float32)
         # OSEM update
-        self._x *= (self.acquisition_model.adjoint_subset(ratio, inds=inds) /
+        self._x *= (self.acquisition_model.adjoint_subset(ratio, subset_inds) /
                     self._adjoint_ones[subset, ...])
 
     def run(self, niter: int, evaluate_cost: bool = False):
@@ -130,12 +134,14 @@ class OSEM:
     def evaluate_cost(self):
         cost = 0
         for subset in range(self.acquisition_model.subsetter.num_subsets):
-            inds = self.acquisition_model.subsetter.get_subset_indices(subset)
+            subset_inds = self.acquisition_model.subsetter.get_subset_indices(
+                subset)
             expected_data = self.acquisition_model.forward_subset(
-                self._x, inds=inds) + self._contamination[inds]
+                self._x, subset_inds) + self._contamination[subset_inds]
 
-            cost += float((expected_data -
-                           self.data[inds] * self.xp.log(expected_data)).sum())
+            cost += float(
+                (expected_data -
+                 self.data[subset_inds] * self.xp.log(expected_data)).sum())
 
         return cost
 

@@ -50,7 +50,7 @@ class PETAcquisitionModel(operators.LinearSubsetOperator):
         return self._sensitivity_factors
 
     @property
-    def image_based_resolution_model(self) -> None:
+    def image_based_resolution_model(self) -> None | operators.LinearOperator:
         return self._image_based_resolution_model
 
     # abstract methods to be implemented
@@ -58,35 +58,28 @@ class PETAcquisitionModel(operators.LinearSubsetOperator):
     def get_subset_shape(self, subset: int) -> tuple[int, ...]:
         return self.projector.get_subset_shape(subset)
 
-    def forward_subset(self,
-                       x: npt.NDArray | cpt.NDArray,
-                       subset: int = 0,
-                       inds=None) -> npt.NDArray | cpt.NDArray:
-
-        if inds is None:
-            inds = self.projector.subsetter.get_subset_indices(subset)
+    def forward_subset(
+        self, x: npt.NDArray | cpt.NDArray,
+        subset_inds: slice | npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
 
         if self.image_based_resolution_model is not None:
             x = self.image_based_resolution_model.forward(x)
 
-        x_forward = self.sensitivity_factors[inds] * self.attenuation_factors[
-            inds] * self.projector.forward_subset(x, inds=inds)
+        x_forward = self.sensitivity_factors[
+            subset_inds] * self.attenuation_factors[
+                subset_inds] * self.projector.forward_subset(x, subset_inds)
 
         return x_forward
 
     def adjoint_subset(
-            self,
-            y_subset: npt.NDArray | cpt.NDArray,
-            subset: int = 0,
-            inds: None | npt.NDArray = None) -> npt.NDArray | cpt.NDArray:
+        self, y_subset: npt.NDArray | cpt.NDArray,
+        subset_inds: slice | npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
 
-        if inds is None:
-            inds = self.projector.subsetter.get_subset_indices(subset)
-
-        y_back = self.projector.adjoint_subset(self.sensitivity_factors[inds] *
-                                               self.attenuation_factors[inds] *
-                                               y_subset,
-                                               inds=inds)
+        y_back = self.projector.adjoint_subset(
+            self.sensitivity_factors[subset_inds] *
+            self.attenuation_factors[subset_inds] * y_subset, subset_inds)
 
         if self.image_based_resolution_model is not None:
             y_back = self.image_based_resolution_model.forward(y_back)
