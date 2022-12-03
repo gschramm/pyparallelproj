@@ -42,21 +42,13 @@ else:
 # input parmeters
 
 # scanner parameters
-radius = 350
-num_sides = 28
-num_lor_endpoints_per_side = 16
-lor_spacing = 4.
-# number of detector rings, 1: single ring -> 2D example, 27: "short 3D scanner"
 num_rings = 1
-
-max_ring_difference = num_rings - 1
-radial_trim = 149
-
-ring_positions = 5.5 * (np.arange(num_rings) - num_rings / 2 + 0.5)
 symmetry_axis = 2
 
 fwhm_mm_data = 4.5
 fwhm_mm_recon = 4.5
+
+voxel_size = (2., 2., 2.)
 
 #-------------------
 # image parameters
@@ -82,12 +74,22 @@ trues_per_volume = 50.
 
 # global sensitivity factor of the scanner that can be used to
 scanner_sensitivty = 1.
-
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 
-voxel_size = (2., 2., 2.)
+# define the scanner geometry
+scanner = scanners.GEDiscoveryMI(num_rings, symmetry_axis=symmetry_axis, xp=xp)
+
+# setup the coincidence descriptor
+coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
+    scanner,
+    radial_trim=65,
+    max_ring_difference=scanner.num_rings - 1,
+    sinogram_spatial_axis_order=coincidences.
+    SinogramSpatialAxisOrder[sinogram_order])
+
+#---------------------------------------------------------------------
 
 nii = nib.as_closest_canonical(
     nib.load(
@@ -101,7 +103,8 @@ image = (image[:, ::2, :] + image[:, 1::2, :]) / 2
 image = (image[:, :, ::2] + image[:, :, 1::2]) / 2
 
 num_axial = max(
-    int((ring_positions.max() - ring_positions.min()) /
+    int((scanner.all_lor_endpoints[:, symmetry_axis].max() -
+         scanner.all_lor_endpoints[:, symmetry_axis].min()) /
         voxel_size[symmetry_axis]), 1)
 
 start_sl = image.shape[2] // 2 - num_axial // 2
@@ -117,33 +120,21 @@ attenuation_image = (0.01 * (image > 0)).astype(xp.float32)
 
 #---------------------------------------------------------------------
 
-scanner = scanners.RegularPolygonPETScannerGeometry(
-    radius,
-    num_sides,
-    num_lor_endpoints_per_side,
-    lor_spacing,
-    num_rings,
-    ring_positions,
-    symmetry_axis=symmetry_axis,
-    xp=xp)
-
-# setup the coincidence descriptor
-coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
-    scanner,
-    radial_trim=radial_trim,
-    max_ring_difference=max_ring_difference,
-    sinogram_spatial_axis_order=coincidences.
-    SinogramSpatialAxisOrder[sinogram_order])
-
 subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor, num_subsets)
 
 # setup a non-time-of-flight and time-of-flight projector
 nontof_projector = petprojectors.NonTOFPETJosephProjector(
     coincidence_descriptor, image_shape, image_origin, voxel_size, subsetter)
 
-tof_parameters = tof.TOFParameters(num_tofbins=27,
-                                   tofbin_width=22.2,
-                                   sigma_tof=60 / 2.35)
+# tof parameters
+speed_of_light = 300.  # [mm/ns]
+time_res_FWHM = 0.385  # [ns]
+
+tof_parameters = tof.TOFParameters(
+    num_tofbins=29,
+    tofbin_width=13 * 0.01302 * speed_of_light / 2,
+    sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
+    num_sigmas=3)
 
 projector = petprojectors.TOFPETJosephProjector(coincidence_descriptor,
                                                 image_shape, image_origin,

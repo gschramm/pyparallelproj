@@ -16,55 +16,51 @@ except:
 
 xp = np
 
-radius = 350
-num_sides = 28
-num_lor_endpoints_per_side = 16
-lor_spacing = 4.
 num_rings = 1
+symmetry_axis = 2
 
-max_ring_difference = num_rings - 1
-radial_trim = 49
-
-ring_positions = 5.55 * (np.arange(num_rings) - num_rings / 2 + 0.5)
-
-num_subsets = 28
+num_subsets = 1
 
 voxsize = (2., 2., 2.)
 
 sinogram_order = 'RVP'
-symmetry_axis = 2
 
 num_trans = 200
-img_shape = (num_trans, num_trans, 1)
+num_ax = 1
+img_shape = (num_trans, num_trans, num_ax)
+
+#---------------------------------------------------------------------
+
 img_origin = ((-0.5 * num_trans + 0.5) * voxsize[0],
-              (-0.5 * num_trans + 0.5) * voxsize[1], 0.)
+              (-0.5 * num_trans + 0.5) * voxsize[1],
+              (-0.5 * num_ax + 0.5) * voxsize[2])
+
 img = xp.zeros(img_shape, dtype=xp.float32)
 img[(num_trans // 4):(-num_trans // 4),
     (num_trans // 4):(-num_trans // 4), :] = 1
-#---------------------------------------------------------------------
-scanner = scanners.RegularPolygonPETScannerGeometry(
-    radius,
-    num_sides,
-    num_lor_endpoints_per_side,
-    lor_spacing,
-    num_rings,
-    ring_positions,
-    symmetry_axis=symmetry_axis,
-    xp=xp)
+
+# setup the scanner geometry
+scanner = scanners.GEDiscoveryMI(num_rings, symmetry_axis=symmetry_axis, xp=xp)
 
 # setup the coincidence descriptor
 coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
     scanner,
-    radial_trim=radial_trim,
-    max_ring_difference=max_ring_difference,
+    radial_trim=65,
+    max_ring_difference=scanner.num_rings - 1,
     sinogram_spatial_axis_order=coincidences.
     SinogramSpatialAxisOrder[sinogram_order])
 
 subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor, num_subsets)
 
-tof_parameters = tof.TOFParameters(num_tofbins=27,
-                                   tofbin_width=22.2,
-                                   sigma_tof=60 / 2.35)
+# tof parameters
+speed_of_light = 300.  # [mm/ns]
+time_res_FWHM = 0.385  # [ns]
+
+tof_parameters = tof.TOFParameters(
+    num_tofbins=29,
+    tofbin_width=13 * 0.01302 * speed_of_light / 2,
+    sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
+    num_sigmas=3)
 
 projector = petprojectors.TOFPETJosephProjector(coincidence_descriptor,
                                                 img_shape, img_origin, voxsize,
