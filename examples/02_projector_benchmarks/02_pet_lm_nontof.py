@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 
 import pyparallelproj.scanners as scanners
 import pyparallelproj.wrapper as wrapper
-import pyparallelproj.tof as tof
 
 try:
     import cupy as cp
@@ -40,15 +39,6 @@ ring_positions = 5.31556 * np.arange(num_rings) + (np.arange(num_rings) //
                                                    9) * 2.8
 ring_positions -= 0.5 * ring_positions.max()
 
-# tof parameters
-speed_of_light = 300.  # [mm/ns]
-time_res_FWHM = 0.385  # [ns]
-
-tof_parameters = tof.TOFParameters(
-    num_tofbins=29,
-    tofbin_width=13 * 0.01302 * speed_of_light / 2,
-    sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
-    num_sigmas=3)
 #---------------------------------------------------------------------
 symmetry_axes = (0, 1, 2)
 
@@ -103,29 +93,19 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                                        events[:, 1]).astype(xp.float32)
     xend = scanner.get_lor_endpoints(events[:, 2],
                                      events[:, 3]).astype(xp.float32)
-    tofbin = events[:, 4].astype(xp.int16)
-    if xp.__name__ == 'cupy':
-        tofbin = xp.asarray(tofbin)
 
     image = xp.ones(image_shape, dtype=xp.float32)
     image_fwd = xp.zeros(nevents, dtype=xp.float32)
     back_image = xp.zeros(image_shape, dtype=xp.float32)
 
     t0 = time.time()
-    wrapper.joseph3d_fwd_tof_lm(xstart,
-                                xend,
-                                image,
-                                image_origin,
-                                voxel_size,
-                                image_fwd,
-                                tof_parameters.tofbin_width,
-                                xp.array([tof_parameters.sigma_tof],
-                                         dtype=xp.float32),
-                                xp.array([tof_parameters.tofcenter_offset],
-                                         dtype=xp.float32),
-                                tof_parameters.num_sigmas,
-                                tofbin,
-                                threadsperblock=threadsperblock)
+    wrapper.joseph3d_fwd(xstart,
+                         xend,
+                         image,
+                         image_origin,
+                         voxel_size,
+                         image_fwd,
+                         threadsperblock=threadsperblock)
 
     if xp.__name__ == 'cupy':
         cp.cuda.Device().synchronize()
@@ -134,20 +114,13 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
     print(t_fwd[ia])
 
     t2 = time.time()
-    wrapper.joseph3d_back_tof_lm(xstart,
-                                 xend,
-                                 back_image,
-                                 image_origin,
-                                 voxel_size,
-                                 y,
-                                 tof_parameters.tofbin_width,
-                                 xp.array([tof_parameters.sigma_tof],
-                                          dtype=xp.float32),
-                                 xp.array([tof_parameters.tofcenter_offset],
-                                          dtype=xp.float32),
-                                 tof_parameters.num_sigmas,
-                                 tofbin,
-                                 threadsperblock=threadsperblock)
+    wrapper.joseph3d_back(xstart,
+                          xend,
+                          back_image,
+                          image_origin,
+                          voxel_size,
+                          y,
+                          threadsperblock=threadsperblock)
 
     if xp.__name__ == 'cupy':
         cp.cuda.Device().synchronize()

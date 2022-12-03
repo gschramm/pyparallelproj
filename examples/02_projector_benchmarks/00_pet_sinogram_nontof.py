@@ -2,6 +2,8 @@ import time
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
 
 import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
@@ -19,28 +21,33 @@ except:
 
 xp = np
 
-radius = 350
-num_sides = 28
+num_runs = 5
+num_subsets = 34
+threadsperblock = 64
+
+# image properties
+num_trans = 215
+num_ax = 71
+voxel_size = np.array([2.78, 2.78, 2.78], dtype=np.float32)
+
+# scanner properties
+radius = 0.5 * (744.1 + 2 * 8.51)
+num_sides = 34
 num_lor_endpoints_per_side = 16
-lor_spacing = 4.
-num_rings = 45
+lor_spacing = 4.03125
+num_rings = 36
+ring_positions = 5.31556 * np.arange(num_rings) + (np.arange(num_rings) //
+                                                   9) * 2.8
+ring_positions -= 0.5 * ring_positions.max()
 
-max_ring_difference = num_rings - 1
-radial_trim = 49
-
-ring_positions = 5.55 * (np.arange(num_rings) - num_rings / 2 + 0.5)
-
-num_subsets = 28
-
-voxsize = np.array([2., 2., 2.], dtype=np.float32)
-num_trans = 300
+radial_trim = 65
 
 #---------------------------------------------------------------------
 sinogram_orders = ('PVR', 'PRV', 'VPR', 'VRP', 'RPV', 'RVP')
 symmetry_axes = (0, 1, 2)
 
-t_fwd = np.zeros((len(sinogram_orders), len(symmetry_axes)))
-t_back = np.zeros((len(sinogram_orders), len(symmetry_axes)))
+df_fwd = pd.DataFrame()
+df_back = pd.DataFrame()
 
 for io, sinogram_order in enumerate(sinogram_orders):
     for ia, symmetry_axis in enumerate(symmetry_axes):
@@ -58,7 +65,7 @@ for io, sinogram_order in enumerate(sinogram_orders):
         cd = coincidences.RegularPolygonPETCoincidenceDescriptor(
             scanner,
             radial_trim=radial_trim,
-            max_ring_difference=max_ring_difference,
+            max_ring_difference=scanner.num_rings - 1,
             sinogram_spatial_axis_order=coincidences.
             SinogramSpatialAxisOrder[sinogram_order])
 
@@ -76,7 +83,7 @@ for io, sinogram_order in enumerate(sinogram_orders):
         img_shape = [num_trans, num_trans, num_trans]
         img_shape[symmetry_axis] = max(
             int((ring_positions.max() - ring_positions.min()) /
-                voxsize[symmetry_axis]), 1)
+                voxel_size[symmetry_axis]), 1)
         img_shape = tuple(img_shape)
         n0, n1, n2 = img_shape
 
@@ -94,58 +101,96 @@ for io, sinogram_order in enumerate(sinogram_orders):
 
         # setup the image origin = the coordinate of the [0,0,0] voxel
         img_origin = (-(np.array(img.shape, dtype=np.float32) / 2) +
-                      0.5) * voxsize
+                      0.5) * voxel_size
         img_fwd = xp.zeros(xstart.shape[0], dtype=xp.float32)
 
         print(cd.sinogram_spatial_axis_order.name)
         print(symmetry_axis, img_shape)
 
-        # perform a complete fwd projection
-        t0 = time.time()
-        ppw.joseph3d_fwd(xstart, xend, img, img_origin, voxsize, img_fwd)
-        if xp.__name__ == 'cupy':
-            cp.cuda.Device().synchronize()
-        t1 = time.time()
-        t_fwd[io, ia] = t1 - t0
-        print(t_fwd[io, ia])
+        for ir in range(num_runs):
+            # perform a complete fwd projection
+            t0 = time.time()
+            ppw.joseph3d_fwd(xstart,
+                             xend,
+                             img,
+                             img_origin,
+                             voxel_size,
+                             img_fwd,
+                             threadsperblock=threadsperblock)
+            if xp.__name__ == 'cupy':
+                cp.cuda.Device().synchronize()
+            t1 = time.time()
+            tmp = pd.DataFrame(
+                {
+                    'sinogram order': cd.sinogram_spatial_axis_order.name,
+                    'symmetry axis': symmetry_axis,
+                    'run': ir,
+                    'time (s)': t1 - t0
+                },
+                index=[0])
+            df_fwd = pd.concat((df_fwd, tmp))
 
-        # perform a complete backprojection
-        back_img = xp.zeros(img.shape, dtype=xp.float32)
-        ones = xp.ones(img_fwd.shape, dtype=xp.float32)
-        t2 = time.time()
-        ppw.joseph3d_back(xstart, xend, back_img, img_origin, voxsize, ones)
-        if xp.__name__ == 'cupy':
-            cp.cuda.Device().synchronize()
-        t3 = time.time()
-        t_back[io, ia] = t3 - t2
-        print(t_back[io, ia])
+            # perform a complete backprojection
+            back_img = xp.zeros(img.shape, dtype=xp.float32)
+            ones = xp.ones(img_fwd.shape, dtype=xp.float32)
+            t2 = time.time()
+            ppw.joseph3d_back(xstart,
+                              xend,
+                              back_img,
+                              img_origin,
+                              voxel_size,
+                              ones,
+                              threadsperblock=threadsperblock)
+            if xp.__name__ == 'cupy':
+                cp.cuda.Device().synchronize()
+            t3 = time.time()
+            tmp = pd.DataFrame(
+                {
+                    'sinogram order': cd.sinogram_spatial_axis_order.name,
+                    'symmetry axis': symmetry_axis,
+                    'run': ir,
+                    'time (s)': t3 - t2
+                },
+                index=[0])
+            df_back = pd.concat((df_back, tmp))
 
-        img_fwd = img_fwd.reshape(subsetter.get_sinogram_subset_shape(0))
-        if xp.__name__ == 'cupy':
-            img_fwd = cp.asnumpy(img_fwd)
-            back_img = cp.asnumpy(back_img)
+            img_fwd = img_fwd.reshape(subsetter.get_sinogram_subset_shape(0))
+            if xp.__name__ == 'cupy':
+                img_fwd = cp.asnumpy(img_fwd)
+                back_img = cp.asnumpy(back_img)
 
-t_total = t_fwd + t_back
+#----------------------------------------------------------------------------
+# plots
+
+df_sum = df_fwd.copy()
+df_sum['time (s)'] = df_fwd['time (s)'] + df_back['time (s)']
 
 fig, ax = plt.subplots(1, 3, figsize=(12, 4), sharex=True, sharey=True)
-for ia, symmetry_axis in enumerate(symmetry_axes):
-    ax[0].plot(t_fwd[:, ia],
-               'x',
-               label=f'scanner axial direction {symmetry_axis}')
-    ax[1].plot(t_back[:, ia], 'x')
-    ax[2].plot(t_total[:, ia], 'x')
-
-for axx in ax:
-    axx.set_xticks(np.arange(len(sinogram_orders)), sinogram_orders)
-    axx.grid(ls=':')
-    axx.set_xlabel('sinogram order')
+sns.barplot(data=df_fwd,
+            x='sinogram order',
+            y='time (s)',
+            hue='symmetry axis',
+            ax=ax[0])
+sns.barplot(data=df_back,
+            x='sinogram order',
+            y='time (s)',
+            hue='symmetry axis',
+            ax=ax[1])
+sns.barplot(data=df_sum,
+            x='sinogram order',
+            y='time (s)',
+            hue='symmetry axis',
+            ax=ax[2])
 
 ax[0].set_title('forward projection')
 ax[1].set_title('back projection')
 ax[2].set_title('forward + back projection')
 
-ax[0].legend()
-ax[0].set_ylabel('time (s)')
+for axx in ax.ravel():
+    axx.grid(ls=':')
 
+sns.move_legend(ax[0], "upper right", ncol=3)
+ax[1].get_legend().remove()
+ax[2].get_legend().remove()
 fig.tight_layout()
 fig.show()
