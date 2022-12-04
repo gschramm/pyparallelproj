@@ -21,28 +21,44 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
     Abstract base class for NonTOF and TOF PET projectors
     """
 
-    def __init__(self,
-                 coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
-                 image_shape: tuple[int, int, int],
-                 image_origin: tuple[float, float, float],
-                 voxel_size: tuple[float, float, float],
-                 subsetter: subsets.Subsetter | None = None,
-                 tof_parameters: tof.TOFParameters | None = None) -> None:
+    def __init__(
+        self,
+        coincidence_descriptor: coincidences.PETCoincidenceDescriptor,
+        image_shape: tuple[int, int, int],
+        image_origin: tuple[float, float, float],
+        voxel_size: tuple[float, float, float],
+        subsetter: subsets.Subsetter | None = None,
+        tof_parameters: tof.TOFParameters | None = None,
+        multiplicative_corrections: npt.NDArray | cpt.NDArray | None = None,
+        multiplicative_correction_list: None | npt.NDArray
+        | cpt.NDArray = None,
+        image_based_resolution_model: None | operators.LinearOperator = None
+    ) -> None:
 
         self._coincidence_descriptor = coincidence_descriptor
         self._image_shape = image_shape
         self._image_origin = image_origin
         self._voxel_size = voxel_size
         self._tof_parameters = tof_parameters
+        self._image_based_resolution_model = image_based_resolution_model
 
         if self.tof:
             output_shape = (self.coincidence_descriptor.num_lors,
                             self.tof_parameters.num_tofbins)
         else:
             output_shape = (self.coincidence_descriptor.num_lors, )
+            self._multiplicative_corrections = multiplicative_corrections
+
+        self._multiplicative_correction_list = multiplicative_correction_list
 
         super().__init__(self.image_shape, output_shape,
                          self.coincidence_descriptor.scanner.xp, subsetter)
+
+        if (multiplicative_corrections is not None) and self.tof:
+            self._multiplicative_corrections = self.xp.expand_dims(
+                multiplicative_corrections, -1)
+        else:
+            self._multiplicative_corrections = multiplicative_corrections
 
     @property
     def coincidence_descriptor(self) -> coincidences.PETCoincidenceDescriptor:
@@ -68,6 +84,37 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
     def tof(self) -> bool:
         return self.tof_parameters is not None
 
+    @property
+    def multiplicative_corrections(self) -> npt.NDArray | cpt.NDArray:
+        return self._multiplicative_corrections
+
+    @multiplicative_corrections.setter
+    def multiplicative_corrections(self,
+                                   value: npt.NDArray | cpt.NDArray) -> None:
+        if self.tof and (value.ndim == 1):
+            self._multiplicative_corrections = np.expand_dims(value, -1)
+        else:
+            self._multiplicative_corrections = value
+
+    @property
+    def multiplicative_correction_list(
+            self) -> None | npt.NDArray | cpt.NDArray:
+        return self._multiplicative_correction_list
+
+    @multiplicative_correction_list.setter
+    def multiplicative_correction_list(
+            self, value: None | npt.NDArray | cpt.NDArray) -> None:
+        self._multiplicative_correction_list = value
+
+    @property
+    def image_based_resolution_model(self) -> None | operators.LinearOperator:
+        return self._image_based_resolution_model
+
+    @image_based_resolution_model.setter
+    def image_based_resolution_model(self,
+                                     value: operators.LinearOperator) -> None:
+        self._image_based_resolution_model = value
+
     def get_subset_shape(self, subset: int) -> tuple[int, ...]:
         if self.tof:
             subset_shape = (self.subsetter.get_subset_index_len(subset),
@@ -77,10 +124,96 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
 
         return subset_shape
 
+    @abc.abstractmethod
+    def forward_geometrical_subset(
+            self, x: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def adjoint_geometrical_subset(
+            self, y_subset: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def forward_geometrical_listmode_subset(
+            self, x: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def adjoint_geometrical_listmode_subset(
+            self, y_subset: npt.NDArray | cpt.NDArray,
+            subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
+        raise NotImplementedError
+
+    def forward_subset(
+        self, x: npt.NDArray | cpt.NDArray,
+        subset_inds: slice | npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
+
+        if self.image_based_resolution_model is not None:
+            x = self.image_based_resolution_model.forward(x)
+
+        x_forward = self.forward_geometrical_subset(x, subset_inds)
+
+        if self.multiplicative_corrections is not None:
+            x_forward *= self.multiplicative_corrections[subset_inds]
+
+        return x_forward
+
+    def adjoint_subset(
+        self, y_subset: npt.NDArray | cpt.NDArray,
+        subset_inds: slice | npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
+
+        if self.multiplicative_corrections is not None:
+            y_subset = y_subset * self.multiplicative_corrections[subset_inds]
+
+        y_back = self.adjoint_geometrical_subset(y_subset, subset_inds)
+
+        if self.image_based_resolution_model is not None:
+            y_back = self.image_based_resolution_model.adjoint(y_back)
+
+        return y_back
+
+    def forward_listmode_subset(
+        self, x: npt.NDArray | cpt.NDArray,
+        subset_inds: slice | npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
+
+        if self.image_based_resolution_model is not None:
+            x = self.image_based_resolution_model.forward(x)
+
+        x_forward = self.forward_geometrical_listmode_subset(x, subset_inds)
+
+        if self.multiplicative_correction_list is not None:
+            x_forward *= self.multiplicative_correction_list[subset_inds]
+
+        return x_forward
+
+    def adjoint_listmode_subset(
+        self, y_subset: npt.NDArray | cpt.NDArray,
+        subset_inds: slice | npt.NDArray | cpt.NDArray
+    ) -> npt.NDArray | cpt.NDArray:
+
+        if self.multiplicative_correction_list is not None:
+            y_subset = y_subset * self.multiplicative_correction_list[
+                subset_inds]
+
+        y_back = self.adjoint_geometrical_listmode_subset(
+            y_subset, subset_inds)
+
+        if self.image_based_resolution_model is not None:
+            y_back = self.image_based_resolution_model.adjoint(y_back)
+
+        return y_back
+
 
 class NonTOFPETJosephProjector(PETProjector):
 
-    def forward_subset(
+    def forward_geometrical_subset(
             self, x: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
@@ -98,7 +231,7 @@ class NonTOFPETJosephProjector(PETProjector):
 
         return image_forward
 
-    def adjoint_subset(
+    def adjoint_geometrical_subset(
             self, y_subset: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
@@ -116,7 +249,7 @@ class NonTOFPETJosephProjector(PETProjector):
 
         return back_image
 
-    def forward_listmode_subset(
+    def forward_geometrical_listmode_subset(
             self, x: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
@@ -134,7 +267,7 @@ class NonTOFPETJosephProjector(PETProjector):
 
         return image_forward
 
-    def adjoint_listmode_subset(
+    def adjoint_geometrical_listmode_subset(
             self, y_subset: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
@@ -155,7 +288,7 @@ class NonTOFPETJosephProjector(PETProjector):
 
 class TOFPETJosephProjector(PETProjector):
 
-    def forward_subset(
+    def forward_geometrical_subset(
             self, x: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
@@ -184,7 +317,7 @@ class TOFPETJosephProjector(PETProjector):
 
         return image_forward
 
-    def adjoint_subset(
+    def adjoint_geometrical_subset(
             self, y_subset: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
@@ -210,7 +343,7 @@ class TOFPETJosephProjector(PETProjector):
 
         return back_image
 
-    def forward_listmode_subset(
+    def forward_geometrical_listmode_subset(
         self, x: npt.NDArray | cpt.NDArray,
         subset_inds: slice | npt.NDArray | cpt.NDArray
     ) -> npt.NDArray | cpt.NDArray:
@@ -240,7 +373,7 @@ class TOFPETJosephProjector(PETProjector):
 
         return image_forward
 
-    def adjoint_listmode_subset(
+    def adjoint_geometrical_listmode_subset(
         self, y_subset: npt.NDArray | cpt.NDArray,
         subset_inds: slice | npt.NDArray | cpt.NDArray
     ) -> npt.NDArray | cpt.NDArray:
