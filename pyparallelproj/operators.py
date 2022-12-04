@@ -107,12 +107,12 @@ class LinearOperator(abc.ABC):
         if padwidth > 0:
             x = self.xp.pad(
                 self.xp.random.rand(*tuple(x - 2 * padwidth
-                                           for x in self._input_shape)),
+                                           for x in self.input_shape)),
                 padwidth).astype(self.xp.float32)
         else:
-            x = self.xp.random.rand(*self._input_shape).astype(self.xp.float32)
+            x = self.xp.random.rand(*self.input_shape).astype(self.xp.float32)
 
-        y = self.xp.random.rand(*self._output_shape).astype(self.xp.float32)
+        y = self.xp.random.rand(*self.output_shape).astype(self.xp.float32)
 
         x_fwd = self.forward(x)
         y_back = self.adjoint(y)

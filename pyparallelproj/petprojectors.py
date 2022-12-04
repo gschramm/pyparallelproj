@@ -51,6 +51,8 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
         else:
             output_shape = (self.coincidence_descriptor.num_lors, )
 
+        self._output_shape = output_shape
+
         return output_shape
 
     @property
