@@ -20,8 +20,8 @@ import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.resolution_models as resolution_models
 import pyparallelproj.algorithms as algorithms
-import pyparallelproj.functionals as functionals
 import pyparallelproj.operators as operators
+import pyparallelproj.functionals as functionals
 
 try:
     import cupy as cp
@@ -40,26 +40,39 @@ else:
     import scipy.ndimage as ndi
 
 #---------------------------------------------------------------------
-# input parmeters
+#---------------------------------------------------------------------
+#--- input parmeters -------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+
+#-------------------
 # reconstruction parameters
 num_iterations = 500
-num_subsets = 1
+
+# prior parameters
 beta = 5e-3
 prior_norm = functionals.L2L1Norm(xp)
 #beta = 3e-4
 #prior_norm = functionals.SquaredL2Norm(xp)
 
+#-------------------
 # scanner parameters
 num_rings = 1
 symmetry_axis = 2
-
 fwhm_mm_data = 4.5
 fwhm_mm_recon = 4.5
 
-voxel_size = (2., 2., 2.)
+# global sensitivity factor of the scanner that can be used to change
+# the norm of the forward operator
+scanner_sensitivty = 1. / 30
+
+#-------------------
+# sinogram (data order) parameters
+sinogram_order = 'RVP'
 
 #-------------------
 # image parameters
+voxel_size = (2., 2., 2.)
 
 # brainweb subset number
 # [4, 5, 6, 18, 20, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54]
@@ -67,21 +80,16 @@ subject_number = 38
 # simulation number [0,1,2]
 sim_number = 0
 
-#-------------------
-# sinogram (data order) parameters
-sinogram_order = 'RVP'
-
 # number of true emitted coincidences per volume (mm^3)
 # 5 -> low counts, 5 -> medium counts, 500 -> high counts
 trues_per_volume = 50.
 
-# global sensitivity factor of the scanner that can be used to
-scanner_sensitivty = 1. / 30
 #---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- define the scanner geometry -------------------------------------
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 
-# define the scanner geometry
 scanner = scanners.GEDiscoveryMI(num_rings, symmetry_axis=symmetry_axis, xp=xp)
 
 # setup the coincidence descriptor
@@ -92,6 +100,10 @@ coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
     sinogram_spatial_axis_order=coincidences.
     SinogramSpatialAxisOrder[sinogram_order])
 
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- setup the emission and attenuation images -----------------------
+#---------------------------------------------------------------------
 #---------------------------------------------------------------------
 
 nii = nib.as_closest_canonical(
@@ -122,22 +134,21 @@ image_origin = tuple(
 attenuation_image = (0.01 * (image > 0)).astype(xp.float32)
 
 #---------------------------------------------------------------------
+#--- setup of the PET forward model (the projector) ------------------
+#---------------------------------------------------------------------
 
-subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor, num_subsets)
-
+#---------------------------------------------------------------------
 # setup a non-time-of-flight and time-of-flight projector
-nontof_projector = petprojectors.NonTOFPETJosephProjector(
-    coincidence_descriptor, image_shape, image_origin, voxel_size)
+# to calculate the attenuation factors based on the attenuation image
+projector = petprojectors.PETJosephProjector(coincidence_descriptor,
+                                             image_shape, image_origin,
+                                             voxel_size)
 
 # simulate the attenuation factors (exp(-fwd(attenuation_image)))
-attenuation_factors = xp.exp(-nontof_projector.forward(attenuation_image))
+attenuation_factors = xp.exp(-projector.forward(attenuation_image))
 
-# simulate LOR sensitivity factors
-sensitivity_factors = xp.full(nontof_projector.output_shape,
-                              scanner_sensitivty,
-                              dtype=xp.float32)
-
-# tof parameters
+#---------------------------------------------------------------------
+# set tof parameters of projector to enable TOF projections
 speed_of_light = 300.  # [mm/ns]
 time_res_FWHM = 0.385  # [ns]
 
@@ -147,32 +158,37 @@ tof_parameters = tof.TOFParameters(
     sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
     num_sigmas=3)
 
+projector.tof_parameters = tof_parameters
+
+#--------------------------------------------------------------------------
+# use an image-based resolution model in the projector to model the effect
+# of limited resolution
 res_model = resolution_models.GaussianImageBasedResolutionModel(
     image_shape, tuple(fwhm_mm_data / (2.35 * x) for x in voxel_size), xp, ndi)
 
-projector = petprojectors.TOFPETJosephProjector(
-    coincidence_descriptor,
-    image_shape,
-    image_origin,
-    voxel_size,
-    subsetter,
-    tof_parameters=tof_parameters,
-    multiplicative_corrections=attenuation_factors * sensitivity_factors,
-    image_based_resolution_model=res_model)
+projector.image_based_resolution_model = res_model
 
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-# simulate acquired data based on forward model and known contaminations
+#--------------------------------------------------------------------------
+# set the multiplicative corrections in the scanner to model photon attenuation
+# and scanner sensitivity
 
-tmp = projector.forward(image)
+projector.multiplicative_corrections = attenuation_factors * scanner_sensitivty
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#--- simulate acquired data based on forward model and known contaminations ---
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+image_fwd = projector.forward(image)
 
 # scale the image such that we get a certain true count per emission voxel value
 emission_volume = xp.where(image > 0)[0].shape[0] * np.prod(voxel_size)
-current_trues_per_volume = float(tmp.sum() / emission_volume)
-image *= (trues_per_volume / current_trues_per_volume)
-del tmp
-image_fwd = projector.forward(image)
+current_trues_per_volume = float(image_fwd.sum() / emission_volume)
+
+scaling_factor = (trues_per_volume / current_trues_per_volume)
+image *= scaling_factor
+image_fwd *= scaling_factor
 
 # simulate a constant background contamination
 contamination = xp.full(projector.output_shape,
@@ -184,9 +200,11 @@ data = xp.random.poisson(image_fwd + contamination).astype(xp.uint16)
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
+#--- run OSEM reconstruction -----------------------------------------
 #---------------------------------------------------------------------
-# run PDHG reconstruction
+#---------------------------------------------------------------------
 
+# update the resolution model which can be different for the reconstruction
 res_model_recon = resolution_models.GaussianImageBasedResolutionModel(
     image_shape, tuple(fwhm_mm_recon / (2.35 * x) for x in voxel_size), xp,
     ndi)
@@ -196,10 +214,10 @@ projector.image_based_resolution_model = res_model_recon
 data_distance = functionals.NegativePoissonLogLikelihood(data, xp)
 prior_operator = operators.GradientOperator(projector.input_shape, xp)
 
-acq_norm = projector.norm()
+projector_norm = projector.norm()
 gam = 1 / image.max()
-sigma = gam * 0.9 / float(acq_norm)
-tau = 0.9 / float(acq_norm) / gam
+sigma = gam * 0.9 / float(projector_norm)
+tau = 0.9 / float(projector_norm) / gam
 
 pdhg = algorithms.PDHG(projector,
                        data_distance,
@@ -218,9 +236,9 @@ x = pdhg.x
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
+#---- visualizations -------------------------------------------------
 #---------------------------------------------------------------------
-
-# visualizations
+#---------------------------------------------------------------------
 
 # get arrays from GPU if running with cupy
 if xp.__name__ == 'cupy':
