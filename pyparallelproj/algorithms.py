@@ -20,7 +20,7 @@ class OSEM:
                  data: npt.NDArray | cpt.NDArray,
                  contamination: npt.NDArray | cpt.NDArray,
                  data_operator: operators.LinearSubsetOperator,
-                 verbose: bool = True):
+                 verbose: bool = True) -> None:
 
         self._data = data
         self._contamination = contamination
@@ -157,7 +157,7 @@ class PDHG:
                  tau: float,
                  theta: float = 0.999,
                  contamination: None | npt.NDArray | cpt.NDArray = None,
-                 g_functional: functionals.FunctionalWithProx | None = None):
+                 g_functional: functionals.FunctionalWithProx | None = None) -> None:
         """
         Parameters
         ----------
