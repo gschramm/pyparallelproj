@@ -224,6 +224,7 @@ class TOFPETJosephProjector(PETProjector):
         xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
             self._events[subset_inds, 2],
             self._events[subset_inds, 3]).astype(self.xp.float32)
+
         tofbin = self._events[subset_inds, 4].astype(self._xp.int16)
 
         image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)

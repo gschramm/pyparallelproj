@@ -380,7 +380,7 @@ class LinearListmodeSubsetOperator(LinearSubsetOperator):
     def forward_listmode(
             self, x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
 
-        x_forward = self.xp.zeros(self._events.shape[0], dtype=self.xp.float32)
+        x_forward = self.xp.zeros(self.events.shape[0], dtype=self.xp.float32)
 
         for subset in range(self.listmode_subsetter.num_subsets):
             subset_inds = self.listmode_subsetter.get_subset_indices(subset)

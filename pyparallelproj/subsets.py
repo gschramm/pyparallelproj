@@ -83,10 +83,10 @@ class Strided1DSubsetter(Subsetter):
         self._num_elements = value
 
     def get_subset_indices(self, subset: int) -> npt.NDArray | slice:
-        return slice(subset, None, self._num_subsets)
+        return slice(subset, None, self.num_subsets)
 
     def get_subset_index_len(self, subset: int) -> int:
-        return math.ceil((self._num_elements - subset) / self.num_subsets)
+        return math.ceil((self.num_elements - subset) / self.num_subsets)
 
 
 class RandomLORSubsetter(Subsetter):
