@@ -19,12 +19,12 @@ class OSEM:
     def __init__(self,
                  data: npt.NDArray | cpt.NDArray,
                  contamination: npt.NDArray | cpt.NDArray,
-                 acquisition_model: operators.LinearSubsetOperator,
+                 data_operator: operators.LinearSubsetOperator,
                  verbose: bool = True):
 
         self._data = data
         self._contamination = contamination
-        self._acquisition_model = acquisition_model
+        self._data_operator = data_operator
         self._verbose = verbose
 
         self._epoch_counter = 0
@@ -33,8 +33,8 @@ class OSEM:
 
         # allocated array for the sensitivity images
         self._adjoint_ones = self.xp.zeros(
-            (self.acquisition_model.subsetter.num_subsets, ) +
-            self.acquisition_model.input_shape,
+            (self.data_operator.subsetter.num_subsets, ) +
+            self.data_operator.input_shape,
             dtype=self.xp.float32)
 
         self.setup()
@@ -44,8 +44,8 @@ class OSEM:
         return self._data
 
     @property
-    def acquisition_model(self) -> operators.LinearSubsetOperator:
-        return self._acquisition_model
+    def data_operator(self) -> operators.LinearSubsetOperator:
+        return self._data_operator
 
     @property
     def contamination(self) -> npt.NDArray | cpt.NDArray:
@@ -57,7 +57,7 @@ class OSEM:
 
     @property
     def xp(self) -> types.ModuleType:
-        return self.acquisition_model.xp
+        return self.data_operator.xp
 
     @property
     def x(self) -> npt.NDArray | cpt.NDArray:
@@ -80,36 +80,33 @@ class OSEM:
         self._cost = np.array([], dtype=self.xp.float32)
 
         if x is None:
-            self._x = self.xp.full(self.acquisition_model.input_shape,
+            self._x = self.xp.full(self.data_operator.input_shape,
                                    1.0,
                                    dtype=self.xp.float32)
         else:
             self._x = x.copy()
 
         # calculate the sensitivity images
-        for subset in range(self.acquisition_model.subsetter.num_subsets):
-            ones = self.xp.ones(
-                self.acquisition_model.get_subset_shape(subset),
-                dtype=self.xp.float32)
+        for subset in range(self.data_operator.subsetter.num_subsets):
+            ones = self.xp.ones(self.data_operator.get_subset_shape(subset),
+                                dtype=self.xp.float32)
 
-            self._adjoint_ones[subset,
-                               ...] = self.acquisition_model.adjoint_subset(
-                                   ones,
-                                   self.acquisition_model.subsetter.
-                                   get_subset_indices(subset))
+            self._adjoint_ones[
+                subset, ...] = self.data_operator.adjoint_subset(
+                    ones,
+                    self.data_operator.subsetter.get_subset_indices(subset))
 
     def subset_update(self, subset: int) -> None:
         # get the LOR indices belonging to the current subset
-        subset_inds = self.acquisition_model.subsetter.get_subset_indices(
-            subset)
+        subset_inds = self.data_operator.subsetter.get_subset_indices(subset)
         # calculate the expected data given the current reconstruction
-        expected_data = self.acquisition_model.forward_subset(
+        expected_data = self.data_operator.forward_subset(
             self._x, subset_inds) + self._contamination[subset_inds]
         # ratio of measured data and expected data
         ratio = (self._data[subset_inds] / expected_data).astype(
             self.xp.float32)
         # OSEM update
-        self._x *= (self.acquisition_model.adjoint_subset(ratio, subset_inds) /
+        self._x *= (self.data_operator.adjoint_subset(ratio, subset_inds) /
                     self._adjoint_ones[subset, ...])
 
     def run(self, niter: int, evaluate_cost: bool = False):
@@ -119,7 +116,7 @@ class OSEM:
         for it in range(niter):
             if self.verbose:
                 print(f"iteration {self.epoch_counter+1}")
-            for isub in range(self.acquisition_model.subsetter.num_subsets):
+            for isub in range(self.data_operator.subsetter.num_subsets):
                 if self.verbose:
                     print(f"subset {isub+1}", end="\r")
                 self.subset_update(isub)
@@ -133,10 +130,10 @@ class OSEM:
 
     def evaluate_cost(self):
         cost = 0
-        for subset in range(self.acquisition_model.subsetter.num_subsets):
-            subset_inds = self.acquisition_model.subsetter.get_subset_indices(
+        for subset in range(self.data_operator.subsetter.num_subsets):
+            subset_inds = self.data_operator.subsetter.get_subset_indices(
                 subset)
-            expected_data = self.acquisition_model.forward_subset(
+            expected_data = self.data_operator.forward_subset(
                 self._x, subset_inds) + self._contamination[subset_inds]
 
             cost += float(
