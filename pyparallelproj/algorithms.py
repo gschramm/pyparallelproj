@@ -128,17 +128,16 @@ class OSEM:
 
         self._cost = np.concatenate((self.cost, cost))
 
-    def evaluate_cost(self):
-        cost = 0
-        for subset in range(self.data_operator.subsetter.num_subsets):
-            subset_inds = self.data_operator.subsetter.get_subset_indices(
-                subset)
-            expected_data = self.data_operator.forward_subset(
-                self._x, subset_inds) + self._contamination[subset_inds]
+    def evaluate_cost(self,
+                      x: None | npt.NDArray | cpt.NDArray = None) -> float:
 
-            cost += float(
-                (expected_data -
-                 self.data[subset_inds] * self.xp.log(expected_data)).sum())
+        if x is None:
+            x = self.x
+
+        expected_data = self.data_operator.forward(x) + self._contamination
+
+        cost = float(
+            (expected_data - self.data * self.xp.log(expected_data)).sum())
 
         return cost
 
@@ -147,17 +146,19 @@ class PDHG:
     """generic primal-dual hybrid gradient algorithm (Chambolle-Pock) for optimizing
        data_distance(data_operator x) + beta*(prior_functional(prior_operator x)) + g_functional(x)"""
 
-    def __init__(self,
-                 data_operator: operators.LinearOperator,
-                 data_distance: functionals.FunctionalWithDualProx,
-                 prior_operator: operators.LinearOperator,
-                 prior_functional: functionals.FunctionalWithDualProx,
-                 beta: float,
-                 sigma: float,
-                 tau: float,
-                 theta: float = 0.999,
-                 contamination: None | npt.NDArray | cpt.NDArray = None,
-                 g_functional: functionals.FunctionalWithProx | None = None) -> None:
+    def __init__(
+            self,
+            data_operator: operators.LinearOperator,
+            data_distance: functionals.FunctionalWithDualProx,
+            prior_operator: operators.LinearOperator,
+            prior_functional: functionals.FunctionalWithDualProx,
+            beta: float,
+            sigma: float,
+            tau: float,
+            theta: float = 0.999,
+            contamination: None | npt.NDArray | cpt.NDArray = None,
+            g_functional: functionals.FunctionalWithProx | None = None
+    ) -> None:
         """
         Parameters
         ----------
@@ -208,6 +209,10 @@ class PDHG:
                                       dtype=self.xp.float32)
 
         self.setup()
+
+    @property
+    def data_operator(self) -> operators.LinearOperator:
+        return self._data_operator
 
     @property
     def xp(self) -> types.ModuleType:
@@ -291,6 +296,7 @@ class PDHG:
             num_iterations: int,
             calculate_cost: bool = False,
             verbose: bool = True) -> None:
+
         for i in range(num_iterations):
             self.update()
             if verbose:

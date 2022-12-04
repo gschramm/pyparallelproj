@@ -219,20 +219,20 @@ gam = 1 / image.max()
 sigma = gam * 0.9 / float(projector_norm)
 tau = 0.9 / float(projector_norm) / gam
 
-pdhg = algorithms.PDHG(projector,
-                       data_distance,
-                       prior_operator,
-                       prior_norm,
-                       beta,
-                       sigma,
-                       tau,
-                       contamination=contamination,
-                       g_functional=functionals.BoundIndicatorFunctional(
-                           xp, lb=0., ub=xp.inf))
+reconstructor = algorithms.PDHG(
+    projector,
+    data_distance,
+    prior_operator,
+    prior_norm,
+    beta,
+    sigma,
+    tau,
+    contamination=contamination,
+    g_functional=functionals.BoundIndicatorFunctional(xp, lb=0., ub=xp.inf))
 
-pdhg.run(num_iterations, calculate_cost=True)
+reconstructor.run(num_iterations, calculate_cost=True)
 
-x = pdhg.x
+x = reconstructor.x
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------

@@ -46,7 +46,7 @@ else:
 #-------------------
 # reconstruction parameters
 num_iterations = 6
-num_subsets = 28
+num_subsets = 34
 
 #-------------------
 # scanner parameters

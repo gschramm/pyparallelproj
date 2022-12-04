@@ -47,11 +47,11 @@ else:
 #-------------------
 # reconstruction parameters
 num_iterations = 6
-num_subsets = 28
+num_subsets = 34
 
 #-------------------
 # scanner parameters
-num_rings = 3
+num_rings = 1
 symmetry_axis = 2
 fwhm_mm_data = 4.5
 fwhm_mm_recon = 4.5
@@ -258,6 +258,13 @@ reconstructor = algorithms.OSEM(data, contamination, projector, verbose=True)
 reconstructor.run(num_iterations, evaluate_cost=False)
 
 x = reconstructor.x
+
+print(
+    f'final cost OSEM    ..: {reconstructor.evaluate_cost(reconstructor.x):.5E}'
+)
+print(
+    f'final cost LM-OSEM ..: {reconstructor.evaluate_cost(listmode_reconstructor.x):.5E}'
+)
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
