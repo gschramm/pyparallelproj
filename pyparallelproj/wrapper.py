@@ -117,6 +117,7 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
                 (xstart.ravel(), xend.ravel(), img.ravel(),
                  cp.asarray(img_origin), cp.asarray(voxsize), img_fwd, nLORs,
                  cp.asarray(img_dim)))
+            cp.cuda.Device().synchronize()
     else:
         ok = lib_parallelproj_c.joseph3d_fwd(xstart.ravel(), xend.ravel(),
                                              img.ravel(), img_origin, voxsize,
@@ -212,6 +213,7 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
                 (xstart.ravel(), xend.ravel(), back_img.ravel(),
                  cp.asarray(img_origin), cp.asarray(voxsize), sino.ravel(),
                  nLORs, cp.asarray(img_dim)))
+            cp.cuda.Device().synchronize()
     else:
         ok = lib_parallelproj_c.joseph3d_back(xstart.ravel(), xend.ravel(),
                                               back_img.ravel(), img_origin,
@@ -344,6 +346,7 @@ def joseph3d_fwd_tof_sino(xstart: npt.NDArray | cpt.NDArray,
                  np.float32(tofbin_width), cp.asarray(sigma_tof.ravel()),
                  cp.asarray(tofcenter_offset.ravel()), np.float32(nsigmas),
                  lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
+            cp.cuda.Device().synchronize()
 
     else:
         ok = lib_parallelproj_c.joseph3d_fwd_tof_sino(
@@ -486,6 +489,7 @@ def joseph3d_back_tof_sino(xstart: npt.NDArray | cpt.NDArray,
                  np.float32(tofbin_width), cp.asarray(sigma_tof).ravel(),
                  cp.asarray(tofcenter_offset).ravel(), np.float32(nsigmas),
                  lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
+            cp.cuda.Device().synchronize()
     else:
         ok = lib_parallelproj_c.joseph3d_back_tof_sino(
             xstart.ravel(), xend.ravel(), back_img.ravel(), img_origin,
@@ -616,6 +620,7 @@ def joseph3d_fwd_tof_lm(xstart: npt.NDArray | cpt.NDArray,
                  np.float32(tofbin_width), cp.asarray(sigma_tof),
                  cp.asarray(tofcenter_offset), np.float32(nsigmas), tofbin,
                  lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
+            cp.cuda.Device().synchronize()
     else:
         ok = lib_parallelproj_c.joseph3d_fwd_tof_lm(
             xstart.ravel(), xend.ravel(), img.ravel(), img_origin, voxsize,
@@ -762,6 +767,7 @@ def joseph3d_back_tof_lm(xstart: npt.NDArray | cpt.NDArray,
                  np.float32(tofbin_width), cp.asarray(sigma_tof),
                  cp.asarray(tofcenter_offset), np.float32(nsigmas), tofbin,
                  lor_dependent_sigma_tof, lor_dependent_tofcenter_offset))
+            cp.cuda.Device().synchronize()
     else:
         ok = lib_parallelproj_c.joseph3d_back_tof_lm(
             xstart.ravel(), xend.ravel(), back_img.ravel(), img_origin,

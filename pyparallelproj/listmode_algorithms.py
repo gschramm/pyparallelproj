@@ -1,4 +1,5 @@
 import types
+from time import time
 
 import numpy as np
 import numpy.typing as npt
@@ -28,6 +29,7 @@ class LM_OSEM:
 
         self._epoch_counter = 0
         self._cost = np.array([], dtype=self.xp.float32)
+        self._walltime = []
         self._x = None
 
         self._adjoint_ones = adjoint_ones
@@ -66,6 +68,10 @@ class LM_OSEM:
     def num_subsets(self) -> int:
         return self.data_operator.listmode_subsetter.num_subsets
 
+    @property
+    def walltime(self) -> list[float, ...]:
+        return self._walltime
+
     def setup(self, x: None | npt.NDArray | cpt.NDArray = None):
         self._epoch_counter = 0
         self._cost = np.array([], dtype=self.xp.float32)
@@ -89,6 +95,7 @@ class LM_OSEM:
             self.num_subsets / exp_list, subset_inds) / self.adjoint_ones)
 
     def run(self, niter: int):
+        self._walltime.append(time())
         for it in range(niter):
             if self.verbose:
                 print(f"iteration {self.epoch_counter+1}")
@@ -98,3 +105,4 @@ class LM_OSEM:
                 self.subset_update(isub)
 
             self._epoch_counter += 1
+            self._walltime.append(time())

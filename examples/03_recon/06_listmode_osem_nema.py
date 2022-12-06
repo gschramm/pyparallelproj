@@ -10,11 +10,13 @@
 #-----------------------------------------------------------------------
 
 import json
+from time import time
 import h5py
 from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
 
 import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
@@ -49,7 +51,7 @@ else:
 # reconstruction parameters
 num_iterations = 4
 num_subsets = 34
-num_events = None
+num_events = 40000000
 
 #-------------------
 # scanner parameters
@@ -64,6 +66,7 @@ sinogram_order = 'RVP'
 # image parameters
 voxel_size = (2.78, 2.78, 2.78)
 image_shape = (135, 135, 71)
+#image_shape = (215, 215, 71)
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -129,8 +132,12 @@ if xp.__name__ == 'cupy':
 projector.events = all_xtals
 projector.multiplicative_correction_list = all_multiplicative_factors
 
+t0 = time()
 adjoint_ones = projector.adjoint_listmode(
     xp.ones(all_xtals.shape[0], dtype=xp.float32))
+t1 = time()
+
+print(f'time to calculate non-tof adjoint ones {(t1-t0):.2F}s')
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -151,7 +158,8 @@ with h5py.File(data_path / 'corrections.h5', 'r') as data:
 
 # shuffle events since events come semi sorted
 print('shuffling LM data')
-ie = np.arange(num_events)
+num_all_events = events.shape[0]
+ie = np.arange(num_all_events)
 np.random.shuffle(ie)
 events = events[ie, :]
 multiplicative_correction_list = multiplicative_correction_list[ie]
@@ -167,7 +175,7 @@ if num_events is not None:
     multiplicative_correction_list = multiplicative_correction_list[:
                                                                     num_events]
     contamination_list = contamination_list[:num_events] * (num_events /
-                                                            events.shape[0])
+                                                            num_all_events)
     events = events[:num_events, :]
 
 if xp.__name__ == 'cupy':
@@ -197,14 +205,16 @@ tof_parameters = tof.TOFParameters(
     num_sigmas=3)
 
 projector.tof_parameters = tof_parameters
-
 projector.listmode_subsetter.num_subsets = num_subsets
 
+print('starting reconstruction')
 listmode_reconstructor = lm_algorithms.LM_OSEM(contamination_list, projector,
                                                adjoint_ones)
 listmode_reconstructor.run(num_iterations)
 
 x_lm = listmode_reconstructor.x
+
+print(f'time per iteration {np.diff(listmode_reconstructor.walltime)}s')
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -216,12 +226,16 @@ x_lm = listmode_reconstructor.x
 if xp.__name__ == 'cupy':
     x_lm = xp.asnumpy(x_lm)
 
-fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+x_lm_sm = gaussian_filter(x_lm, 6. / (2.35 * np.array(voxel_size)))
+
+fig, ax = plt.subplots(2, 2, figsize=(8, 8), sharex='col', sharey='col')
 ims = dict(cmap=plt.cm.Greys,
            origin='lower',
            vmin=0,
-           vmax=0.6 * num_events / 5e7)
-ax[0].imshow(x_lm[:, :, 51].T, **ims)
-ax[1].imshow(x_lm[:, image_shape[1] // 2, :].T, **ims)
+           vmax=0.35 * num_events / 4e7)
+ax[0, 0].imshow(x_lm[:, :, 51].T, **ims)
+ax[0, 1].imshow(x_lm[:, image_shape[1] // 2, :].T, **ims)
+ax[1, 0].imshow(x_lm_sm[:, :, 51].T, **ims)
+ax[1, 1].imshow(x_lm_sm[:, image_shape[1] // 2, :].T, **ims)
 fig.tight_layout()
 fig.show()
