@@ -14,7 +14,7 @@ except:
     warnings.warn('cupy module not available')
     import numpy as cp
 
-xp = np
+xp = cp
 
 num_rings = 1
 symmetry_axis = 2
@@ -62,9 +62,10 @@ tof_parameters = tof.TOFParameters(
     sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
     num_sigmas=3)
 
-projector = petprojectors.TOFPETJosephProjector(coincidence_descriptor,
-                                                img_shape, img_origin, voxsize,
-                                                subsetter, tof_parameters)
+projector = petprojectors.PETJosephProjector(coincidence_descriptor, img_shape,
+                                             img_origin, voxsize)
+projector.subsetter = subsetter
+projector.tof_parameters = tof_parameters
 
 # simulate data
 # Ax
@@ -108,7 +109,7 @@ ax[1].imshow(img_fwd[..., 0, 10])
 ax[2].imshow(data[..., 0, 10])
 ax[3].imshow(data_fidelity_gradient[..., 0])
 ax[0].set_title('x')
-ax[1].set_title('A x')
+ax[1].set_title('A x (central TOF bin)')
 ax[2].set_title('Poisson(A x)')
 ax[3].set_title('data_fidelity_gradient')
 fig.tight_layout()

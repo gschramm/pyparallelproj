@@ -49,9 +49,10 @@ coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
 
 subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor, num_subsets)
 
-projector = petprojectors.NonTOFPETJosephProjector(coincidence_descriptor,
-                                                   img_shape, img_origin,
-                                                   voxsize, subsetter)
+projector = petprojectors.PETJosephProjector(coincidence_descriptor, img_shape,
+                                             img_origin, voxsize)
+
+projector.subsetter = subsetter
 
 # simulate data
 # Ax
