@@ -193,18 +193,7 @@ projector.multiplicative_correction_list = multiplicative_correction_list
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 
-#---------------------------------------------------------------------
-# set tof parameters of projector to enable TOF projections
-speed_of_light = 300.  # [mm/ns]
-time_res_FWHM = 0.385  # [ns]
-
-tof_parameters = tof.TOFParameters(
-    num_tofbins=29,
-    tofbin_width=13 * 0.01302 * speed_of_light / 2,
-    sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
-    num_sigmas=3)
-
-projector.tof_parameters = tof_parameters
+projector.tof_parameters = tof.ge_discoverymi_tof_parameters
 projector.listmode_subsetter.num_subsets = num_subsets
 
 print('starting reconstruction')

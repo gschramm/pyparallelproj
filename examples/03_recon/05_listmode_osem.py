@@ -141,18 +141,7 @@ projector = petprojectors.PETJosephProjector(coincidence_descriptor,
 # simulate the attenuation factors (exp(-fwd(attenuation_image)))
 attenuation_factors = xp.exp(-projector.forward(attenuation_image))
 
-#---------------------------------------------------------------------
-# set tof parameters of projector to enable TOF projections
-speed_of_light = 300.  # [mm/ns]
-time_res_FWHM = 0.385  # [ns]
-
-tof_parameters = tof.TOFParameters(
-    num_tofbins=29,
-    tofbin_width=13 * 0.01302 * speed_of_light / 2,
-    sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
-    num_sigmas=3)
-
-projector.tof_parameters = tof_parameters
+projector.tof_parameters = tof.ge_discoverymi_tof_parameters
 
 #--------------------------------------------------------------------------
 # use an image-based resolution model in the projector to model the effect
@@ -204,7 +193,7 @@ non_zero_data = data[non_zero_bins]
 lor_nums = np.repeat(xp.asnumpy(non_zero_bins[0]), xp.asnumpy(non_zero_data))
 tof_bins = np.repeat(
     xp.asnumpy(non_zero_bins[1]),
-    xp.asnumpy(non_zero_data)) - tof_parameters.num_tofbins // 2
+    xp.asnumpy(non_zero_data)) - projector.tof_parameters.num_tofbins // 2
 
 # get the detecor numbers from the LOR numbers of the events
 start_mod, start_ind, end_mod, end_ind = coincidence_descriptor.get_lor_indices(
@@ -281,7 +270,7 @@ if xp.__name__ == 'cupy':
 
 # reshape the data into a sinogram (just for visualizations)
 data_reshaped = data.reshape(coincidence_descriptor.sinogram_spatial_shape +
-                             (tof_parameters.num_tofbins, ))
+                             (projector.tof_parameters.num_tofbins, ))
 
 fig, ax = plt.subplots(1, 4, figsize=(16, 4))
 ims = dict(cmap=plt.cm.Greys, vmin=0, vmax=1.2 * image.max(), origin='lower')
@@ -289,7 +278,7 @@ ax[0].imshow(image[:, :, image_shape[2] // 2].T, **ims)
 ax[1].imshow(x[:, :, image_shape[2] // 2].T, **ims)
 ax[2].imshow(x_lm[:, :, image_shape[2] // 2].T, **ims)
 ax[3].imshow(data_reshaped[:, :, num_rings // 2,
-                           tof_parameters.num_tofbins // 2].T,
+                           projector.tof_parameters.num_tofbins // 2].T,
              cmap=plt.cm.Greys)
 fig.tight_layout()
 fig.show()

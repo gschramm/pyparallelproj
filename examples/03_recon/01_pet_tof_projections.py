@@ -52,20 +52,10 @@ coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
 
 subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor, num_subsets)
 
-# tof parameters
-speed_of_light = 300.  # [mm/ns]
-time_res_FWHM = 0.385  # [ns]
-
-tof_parameters = tof.TOFParameters(
-    num_tofbins=29,
-    tofbin_width=13 * 0.01302 * speed_of_light / 2,
-    sigma_tof=(speed_of_light / 2) * (time_res_FWHM / 2.355),
-    num_sigmas=3)
-
 projector = petprojectors.PETJosephProjector(coincidence_descriptor, img_shape,
                                              img_origin, voxsize)
 projector.subsetter = subsetter
-projector.tof_parameters = tof_parameters
+projector.tof_parameters = tof.ge_discoverymi_tof_parameters
 
 # simulate data
 # Ax
@@ -99,7 +89,7 @@ if xp.__name__ == 'cupy':
 
 # reshape img_fwd into a sinogram with 3 axis
 tofsino_shape = (coincidence_descriptor.sinogram_spatial_shape) + (
-    tof_parameters.num_tofbins, )
+    projector.tof_parameters.num_tofbins, )
 img_fwd = img_fwd.reshape(tofsino_shape)
 data = data.reshape(tofsino_shape)
 
