@@ -1,4 +1,5 @@
 import types
+from time import time
 
 import numpy as np
 import numpy.typing as npt
@@ -29,6 +30,7 @@ class OSEM:
 
         self._epoch_counter = 0
         self._cost = np.array([], dtype=self.xp.float32)
+        self._walltime = []
         self._x = None
 
         # allocated array for the sensitivity images
@@ -75,6 +77,10 @@ class OSEM:
     def cost(self) -> npt.NDArray:
         return self._cost
 
+    @property
+    def walltime(self) -> list[float, ...]:
+        return self._walltime
+
     def setup(self, x: None | npt.NDArray | cpt.NDArray = None):
         self._epoch_counter = 0
         self._cost = np.array([], dtype=self.xp.float32)
@@ -110,8 +116,8 @@ class OSEM:
                     self._adjoint_ones[subset, ...])
 
     def run(self, niter: int, evaluate_cost: bool = False):
-
         cost = np.zeros(niter, dtype=np.float32)
+        self._walltime.append(time())
 
         for it in range(niter):
             if self.verbose:
@@ -125,6 +131,7 @@ class OSEM:
                 cost[it] = self.evaluate_cost()
 
             self._epoch_counter += 1
+            self._walltime.append(time())
 
         self._cost = np.concatenate((self.cost, cost))
 

@@ -49,8 +49,8 @@ num_subsets = 34
 
 #-------------------
 # scanner parameters
-num_rings = 1
-symmetry_axis = 2
+num_rings = 18
+symmetry_axis = 0
 fwhm_mm_data = 4.5
 fwhm_mm_recon = 4.5
 

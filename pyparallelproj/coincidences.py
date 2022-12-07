@@ -619,9 +619,12 @@ class GEDiscoveryMICoincidenceDescriptor(RegularPolygonPETCoincidenceDescriptor
                  max_ring_difference: int | None = None,
                  sinogram_spatial_axis_order:
                  SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR,
+                 symmetry_axis: int = 2,
                  xp: types.ModuleType = np) -> None:
 
-        scanner = scanners.GEDiscoveryMI(num_rings, xp=xp)
+        scanner = scanners.GEDiscoveryMI(num_rings,
+                                         symmetry_axis=symmetry_axis,
+                                         xp=xp)
 
         super().__init__(
             scanner,

@@ -1,29 +1,44 @@
 import time
-
+import argparse
+import os
 import numpy as np
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--num_runs', type=int, default=5)
+parser.add_argument('--num_subsets', type=int, default=34)
+parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
+parser.add_argument('--threadsperblock', type=int, default=64)
+parser.add_argument('--output_file', type=int, default=None)
+parser.add_argument('--output_dir', default='results')
+args = parser.parse_args()
+
+if args.mode == 'GPU':
+    import cupy as cp
+    xp = cp
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+elif args.mode == 'hybrid':
+    xp = np
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+elif args.mode == 'CPU':
+    xp = np
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+else:
+    raise ValueError
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
-import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
-import pyparallelproj.wrapper as ppw
+import pyparallelproj.wrapper as wrapper
 import pyparallelproj.subsets as subsets
 
-try:
-    import cupy as cp
-except:
-    import warnings
-    warnings.warn('cupy module not available')
-    import numpy as cp
+num_runs = args.num_runs
+threadsperblock = args.threadsperblock
+num_subsets = args.num_subsets
 
-#---------------------------------------------------------------------
-
-xp = np
-
-num_runs = 5
-num_subsets = 34
-threadsperblock = 64
+output_dir = args.output_dir
+if args.output_file is None:
+    output_file = f'tofsinogram__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numsubsets_{num_subsets}.csv'
 
 # image properties
 num_trans = 215
@@ -34,36 +49,33 @@ voxel_size = np.array([2.78, 2.78, 2.78], dtype=np.float32)
 num_rings = 36
 
 #---------------------------------------------------------------------
-radial_trim = 65
 sinogram_orders = ('PVR', 'PRV', 'VPR', 'VRP', 'RPV', 'RVP')
 symmetry_axes = (0, 1, 2)
 
-df_fwd = pd.DataFrame()
-df_back = pd.DataFrame()
+df = pd.DataFrame()
 
 for io, sinogram_order in enumerate(sinogram_orders):
     for ia, symmetry_axis in enumerate(symmetry_axes):
-        scanner = scanners.GEDiscoveryMI(num_rings,
-                                         symmetry_axis=symmetry_axis,
-                                         xp=xp)
-
-        # setup the coincidence descriptor
-        cd = coincidences.RegularPolygonPETCoincidenceDescriptor(
-            scanner,
-            radial_trim=radial_trim,
-            max_ring_difference=scanner.num_rings - 1,
+        # define the coincidence descriptor and scanner
+        coincidence_descriptor = coincidences.GEDiscoveryMICoincidenceDescriptor(
+            num_rings=num_rings,
             sinogram_spatial_axis_order=coincidences.
-            SinogramSpatialAxisOrder[sinogram_order])
+            SinogramSpatialAxisOrder[sinogram_order],
+            symmetry_axis=symmetry_axis,
+            xp=xp)
 
-        subsetter = subsets.SingoramViewSubsetter(cd, num_subsets)
+        subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor,
+                                                  num_subsets)
 
         #----------------------------------------------------------------------------
         lors = subsetter.get_subset_indices(0)
 
-        start_mod, start_ind, end_mod, end_ind = cd.get_lor_indices(lors)
-        xstart = scanner.get_lor_endpoints(start_mod,
-                                           start_ind).astype(xp.float32)
-        xend = scanner.get_lor_endpoints(end_mod, end_ind).astype(xp.float32)
+        start_mod, start_ind, end_mod, end_ind = coincidence_descriptor.get_lor_indices(
+            lors)
+        xstart = coincidence_descriptor.scanner.get_lor_endpoints(
+            start_mod, start_ind).astype(xp.float32)
+        xend = coincidence_descriptor.scanner.get_lor_endpoints(
+            end_mod, end_ind).astype(xp.float32)
 
         # setup a box like test image
         img_shape = [num_trans, num_trans, num_trans]
@@ -88,76 +100,87 @@ for io, sinogram_order in enumerate(sinogram_orders):
                       0.5) * voxel_size
         img_fwd = xp.zeros(xstart.shape[0], dtype=xp.float32)
 
-        print(cd.sinogram_spatial_axis_order.name)
+        print(coincidence_descriptor.sinogram_spatial_axis_order.name)
         print(symmetry_axis, img_shape)
 
         for ir in range(num_runs + 1):
             # perform a complete fwd projection
             t0 = time.time()
-            ppw.joseph3d_fwd(xstart,
-                             xend,
-                             img,
-                             img_origin,
-                             voxel_size,
-                             img_fwd,
-                             threadsperblock=threadsperblock)
-            if xp.__name__ == 'cupy':
-                cp.cuda.Device().synchronize()
+            wrapper.joseph3d_fwd(xstart,
+                                 xend,
+                                 img,
+                                 img_origin,
+                                 voxel_size,
+                                 img_fwd,
+                                 threadsperblock=threadsperblock)
             t1 = time.time()
             if ir > 0:
                 tmp = pd.DataFrame(
                     {
-                        'sinogram order': cd.sinogram_spatial_axis_order.name,
-                        'symmetry axis': symmetry_axis,
-                        'run': ir,
-                        'time (s)': t1 - t0
+                        'sinogram order':
+                        coincidence_descriptor.sinogram_spatial_axis_order.
+                        name,
+                        'symmetry axis':
+                        symmetry_axis,
+                        'direction':
+                        'forward',
+                        'run':
+                        ir,
+                        'time (s)':
+                        t1 - t0
                     },
                     index=[0])
-                df_fwd = pd.concat((df_fwd, tmp))
+                df = pd.concat((df, tmp))
 
             # perform a complete backprojection
             back_img = xp.zeros(img.shape, dtype=xp.float32)
             ones = xp.ones(img_fwd.shape, dtype=xp.float32)
             t2 = time.time()
-            ppw.joseph3d_back(xstart,
-                              xend,
-                              back_img,
-                              img_origin,
-                              voxel_size,
-                              ones,
-                              threadsperblock=threadsperblock)
-            if xp.__name__ == 'cupy':
-                cp.cuda.Device().synchronize()
+            wrapper.joseph3d_back(xstart,
+                                  xend,
+                                  back_img,
+                                  img_origin,
+                                  voxel_size,
+                                  ones,
+                                  threadsperblock=threadsperblock)
             t3 = time.time()
             if ir > 0:
                 tmp = pd.DataFrame(
                     {
-                        'sinogram order': cd.sinogram_spatial_axis_order.name,
-                        'symmetry axis': symmetry_axis,
-                        'run': ir,
-                        'time (s)': t3 - t2
+                        'sinogram order':
+                        coincidence_descriptor.sinogram_spatial_axis_order.
+                        name,
+                        'symmetry axis':
+                        symmetry_axis,
+                        'direction':
+                        'back',
+                        'run':
+                        ir,
+                        'time (s)':
+                        t3 - t2
                     },
                     index=[0])
-                df_back = pd.concat((df_back, tmp))
-
-            img_fwd = img_fwd.reshape(subsetter.get_sinogram_subset_shape(0))
-            if xp.__name__ == 'cupy':
-                img_fwd = cp.asnumpy(img_fwd)
-                back_img = cp.asnumpy(back_img)
+                df = pd.concat((df, tmp))
 
 #----------------------------------------------------------------------------
+# save results
+
+df.to_csv(os.path.join(output_dir, output_file), index=False)
+
 # plots
 
-df_sum = df_fwd.copy()
-df_sum['time (s)'] = df_fwd['time (s)'] + df_back['time (s)']
+df_sum = df.loc[df.direction == 'forward'].copy()
+df_sum['time (s)'] = df.loc[df.direction == 'forward']['time (s)'] + df.loc[
+    df.direction == 'back']['time (s)']
+df_sum['direction'] = 'forward+back'
 
 fig, ax = plt.subplots(1, 3, figsize=(12, 4), sharex=True, sharey=True)
-sns.barplot(data=df_fwd,
+sns.barplot(data=df.loc[df.direction == 'forward'],
             x='sinogram order',
             y='time (s)',
             hue='symmetry axis',
             ax=ax[0])
-sns.barplot(data=df_back,
+sns.barplot(data=df.loc[df.direction == 'back'],
             x='sinogram order',
             y='time (s)',
             hue='symmetry axis',
