@@ -1,32 +1,46 @@
+import time
+import argparse
+import os
+import numpy as np
 import json
 from pathlib import Path
 import h5py
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--num_runs', type=int, default=5)
+parser.add_argument('--num_events', type=int, default=10000000)
+parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
+parser.add_argument('--threadsperblock', type=int, default=64)
+parser.add_argument('--output_file', type=int, default=None)
+parser.add_argument('--output_dir', default='results')
+args = parser.parse_args()
+
+if args.mode == 'GPU':
+    import cupy as cp
+    xp = cp
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+elif args.mode == 'hybrid':
+    xp = np
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+elif args.mode == 'CPU':
+    xp = np
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+else:
+    raise ValueError
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
-import time
-
-import numpy as np
-import matplotlib.pyplot as plt
-
 import pyparallelproj.scanners as scanners
 import pyparallelproj.wrapper as wrapper
 
-try:
-    import cupy as cp
-except:
-    import warnings
-    warnings.warn('cupy module not available')
-    import numpy as cp
+num_runs = args.num_runs
+threadsperblock = args.threadsperblock
+num_events = args.num_events
 
-#---------------------------------------------------------------------
-
-xp = np
-
-num_runs = 10
-nevents = 10000000
-num_subsets = 1
-threadsperblock = 64
+output_dir = args.output_dir
+if args.output_file is None:
+    output_file = f'nontoflistmode__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents{num_events}.csv'
 
 # image properties
 num_trans = 215
@@ -39,8 +53,7 @@ num_rings = 36
 #---------------------------------------------------------------------
 symmetry_axes = (0, 1, 2)
 
-df_fwd = pd.DataFrame()
-df_back = pd.DataFrame()
+df = pd.DataFrame()
 
 #---------------------------------------------------------------------
 # load listmode data
@@ -50,12 +63,12 @@ with open('.nema_data.json', 'r') as jfile:
 with h5py.File(data_path / 'LIST0000.BLF', 'r') as data:
     events = data['MiceList/TofCoinc'][:]
 
-if nevents is None:
-    nevents = events.shape[0]
+if num_events is None:
+    num_events = events.shape[0]
 
 # shuffle events since events come semi sorted
 print('shuffling LM data')
-ie = np.arange(nevents)
+ie = np.arange(num_events)
 np.random.shuffle(ie)
 events = events[ie, :]
 
@@ -75,7 +88,7 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                             dtype=np.float32)
 
     print(
-        f'{symmetry_axis, image_shape} {threadsperblock} tpb  {nevents//1000000}e6 events'
+        f'{symmetry_axis, image_shape} {threadsperblock} tpb  {num_events//1000000}e6 events'
     )
 
     scanner = scanners.GEDiscoveryMI(num_rings,
@@ -88,7 +101,7 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                                      events[:, 3]).astype(xp.float32)
 
     image = xp.ones(image_shape, dtype=xp.float32)
-    image_fwd = xp.zeros(nevents, dtype=xp.float32)
+    image_fwd = xp.zeros(num_events, dtype=xp.float32)
     back_image = xp.zeros(image_shape, dtype=xp.float32)
 
     for ir in range(num_runs + 1):
@@ -100,19 +113,17 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                              voxel_size,
                              image_fwd,
                              threadsperblock=threadsperblock)
-
-        if xp.__name__ == 'cupy':
-            cp.cuda.Device().synchronize()
         t1 = time.time()
         if ir > 0:
             tmp = pd.DataFrame(
                 {
                     'symmetry axis': symmetry_axis,
+                    'direction': 'forward',
                     'run': ir,
                     'time (s)': t1 - t0
                 },
                 index=[0])
-            df_fwd = pd.concat((df_fwd, tmp))
+            df = pd.concat((df, tmp))
 
         t2 = time.time()
         wrapper.joseph3d_back(xstart,
@@ -122,29 +133,39 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                               voxel_size,
                               y,
                               threadsperblock=threadsperblock)
-
-        if xp.__name__ == 'cupy':
-            cp.cuda.Device().synchronize()
         t3 = time.time()
         if ir > 0:
             tmp = pd.DataFrame(
                 {
                     'symmetry axis': symmetry_axis,
+                    'direction': 'back',
                     'run': ir,
                     'time (s)': t3 - t2
                 },
                 index=[0])
-            df_back = pd.concat((df_back, tmp))
+            df = pd.concat((df, tmp))
 
 #---------------------------------------------------------------------
+# save results
+
+df.to_csv(os.path.join(output_dir, output_file), index=False)
+
 # plots
 
-df_sum = df_fwd.copy()
-df_sum['time (s)'] = df_fwd['time (s)'] + df_back['time (s)']
+df_sum = df.loc[df.direction == 'forward'].copy()
+df_sum['time (s)'] = df.loc[df.direction == 'forward']['time (s)'] + df.loc[
+    df.direction == 'back']['time (s)']
+df_sum['direction'] = 'forward+back'
 
 fig, ax = plt.subplots(1, 3, figsize=(3 * 4, 4), sharex=True, sharey=True)
-sns.barplot(data=df_fwd, x='symmetry axis', y='time (s)', ax=ax[0])
-sns.barplot(data=df_back, x='symmetry axis', y='time (s)', ax=ax[1])
+sns.barplot(data=df.loc[df.direction == 'forward'],
+            x='symmetry axis',
+            y='time (s)',
+            ax=ax[0])
+sns.barplot(data=df.loc[df.direction == 'back'],
+            x='symmetry axis',
+            y='time (s)',
+            ax=ax[1])
 sns.barplot(data=df_sum, x='symmetry axis', y='time (s)', ax=ax[2])
 
 ax[0].set_title('forward projection')
