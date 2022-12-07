@@ -18,7 +18,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 
-import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
@@ -77,16 +76,11 @@ image_shape = (135, 135, 71)
 image_origin = tuple(
     (-0.5 * image_shape[i] + 0.5) * voxel_size[i] for i in range(3))
 
-scanner = scanners.GEDiscoveryMI(36, symmetry_axis=symmetry_axis, xp=xp)
-
-# setup the coincidence descriptor
-coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
-    scanner,
-    radial_trim=65,
-    max_ring_difference=scanner.num_rings - 1,
+coincidence_descriptor = coincidences.GEDiscoveryMICoincidenceDescriptor(
+    num_rings=36,
     sinogram_spatial_axis_order=coincidences.
-    SinogramSpatialAxisOrder[sinogram_order])
-
+    SinogramSpatialAxisOrder[sinogram_order],
+    xp=xp)
 #---------------------------------------------------------------------
 #--- setup of the PET forward model (the projector) ------------------
 #---------------------------------------------------------------------
@@ -184,6 +178,7 @@ if xp.__name__ == 'cupy':
     multiplicative_correction_list = xp.asarray(multiplicative_correction_list)
     contamination_list = xp.asarray(contamination_list)
 
+# pass listmode events and multiplicative_correction_list to the projector
 projector.events = events
 projector.multiplicative_correction_list = multiplicative_correction_list
 

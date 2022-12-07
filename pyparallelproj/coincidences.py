@@ -1,5 +1,6 @@
 """description of LOR endpoint combinations (LORs) in a scanners consisting of modules of LOR endpoints"""
 import abc
+import types
 import enum
 import itertools
 
@@ -607,3 +608,23 @@ if __name__ == '__main__':
         fig.show()
     else:
         print(f'not plotting because of too many LORs {cd.num_lors}')
+
+
+class GEDiscoveryMICoincidenceDescriptor(RegularPolygonPETCoincidenceDescriptor
+                                         ):
+
+    def __init__(self,
+                 num_rings: int = 36,
+                 radial_trim: int = 65,
+                 max_ring_difference: int | None = None,
+                 sinogram_spatial_axis_order:
+                 SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR,
+                 xp: types.ModuleType = np) -> None:
+
+        scanner = scanners.GEDiscoveryMI(num_rings, xp=xp)
+
+        super().__init__(
+            scanner,
+            radial_trim=radial_trim,
+            max_ring_difference=max_ring_difference,
+            sinogram_spatial_axis_order=sinogram_spatial_axis_order)

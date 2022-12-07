@@ -13,9 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import nibabel as nib
 
-import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
-import pyparallelproj.subsets as subsets
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.resolution_models as resolution_models
@@ -86,22 +84,6 @@ trues_per_volume = 50.
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
-#--- define the scanner geometry -------------------------------------
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
-
-scanner = scanners.GEDiscoveryMI(num_rings, symmetry_axis=symmetry_axis, xp=xp)
-
-# setup the coincidence descriptor
-coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
-    scanner,
-    radial_trim=65,
-    max_ring_difference=scanner.num_rings - 1,
-    sinogram_spatial_axis_order=coincidences.
-    SinogramSpatialAxisOrder[sinogram_order])
-
-#---------------------------------------------------------------------
-#---------------------------------------------------------------------
 #--- setup the emission and attenuation images -----------------------
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -117,10 +99,9 @@ image = (image[::2, :, :] + image[1::2, :, :]) / 2
 image = (image[:, ::2, :] + image[:, 1::2, :]) / 2
 image = (image[:, :, ::2] + image[:, :, 1::2]) / 2
 
-num_axial = max(
-    int((scanner.all_lor_endpoints[:, symmetry_axis].max() -
-         scanner.all_lor_endpoints[:, symmetry_axis].min()) /
-        voxel_size[symmetry_axis]), 1)
+num_axial = max(int(5.5 * num_rings / voxel_size[symmetry_axis]), 1)
+if num_rings == 1:
+    num_axial = 1
 
 start_sl = image.shape[2] // 2 - num_axial // 2
 end_sl = start_sl + num_axial
@@ -136,6 +117,12 @@ attenuation_image = (0.01 * (image > 0)).astype(xp.float32)
 #---------------------------------------------------------------------
 #--- setup of the PET forward model (the projector) ------------------
 #---------------------------------------------------------------------
+
+coincidence_descriptor = coincidences.GEDiscoveryMICoincidenceDescriptor(
+    num_rings=num_rings,
+    sinogram_spatial_axis_order=coincidences.
+    SinogramSpatialAxisOrder[sinogram_order],
+    xp=xp)
 
 #---------------------------------------------------------------------
 # setup a non-time-of-flight and time-of-flight projector

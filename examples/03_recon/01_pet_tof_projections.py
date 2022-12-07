@@ -1,11 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
-import pyparallelproj.subsets as subsets
-import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
+import pyparallelproj.tof as tof
 
 try:
     import cupy as cp
@@ -14,23 +12,31 @@ except:
     warnings.warn('cupy module not available')
     import numpy as cp
 
+# numpy / cupy module to use
 xp = cp
 
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- input parmeters -------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+
+# scanner parameters
 num_rings = 1
 symmetry_axis = 2
 
-num_subsets = 1
-
+# image parameters
 voxsize = (2., 2., 2.)
-
-sinogram_order = 'RVP'
-
 num_trans = 200
 num_ax = 1
-img_shape = (num_trans, num_trans, num_ax)
 
 #---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- setup a square test image ---------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
 
+img_shape = (num_trans, num_trans, num_ax)
 img_origin = ((-0.5 * num_trans + 0.5) * voxsize[0],
               (-0.5 * num_trans + 0.5) * voxsize[1],
               (-0.5 * num_ax + 0.5) * voxsize[2])
@@ -39,46 +45,60 @@ img = xp.zeros(img_shape, dtype=xp.float32)
 img[(num_trans // 4):(-num_trans // 4),
     (num_trans // 4):(-num_trans // 4), :] = 1
 
-# setup the scanner geometry
-scanner = scanners.GEDiscoveryMI(num_rings, symmetry_axis=symmetry_axis, xp=xp)
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- setup the PET scanner (coicidence descriptor) -------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
 
-# setup the coincidence descriptor
-coincidence_descriptor = coincidences.RegularPolygonPETCoincidenceDescriptor(
-    scanner,
-    radial_trim=65,
-    max_ring_difference=scanner.num_rings - 1,
-    sinogram_spatial_axis_order=coincidences.
-    SinogramSpatialAxisOrder[sinogram_order])
+coincidence_descriptor = coincidences.GEDiscoveryMICoincidenceDescriptor(
+    num_rings=num_rings,
+    sinogram_spatial_axis_order=coincidences.SinogramSpatialAxisOrder['RVP'],
+    xp=xp)
 
-subsetter = subsets.SingoramViewSubsetter(coincidence_descriptor, num_subsets)
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- setup the PET projector (linear forward operator) ---------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
 
 projector = petprojectors.PETJosephProjector(coincidence_descriptor, img_shape,
                                              img_origin, voxsize)
-projector.subsetter = subsetter
+
+# setup the time-of-flight parameters of the projector to enable
+# time-of-flight projections
 projector.tof_parameters = tof.ge_discoverymi_tof_parameters
 
-# simulate data
-# Ax
+# generate a random multiplicative correction sinogram simulating constant sensitivity
+projector.multiplicative_corrections = xp.full(projector.output_shape, 0.3)
+
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- simulate acquired data ------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+
+# forward model A x
 img_fwd = projector.forward(img)
 # additive contamination s
 contamination = xp.ones_like(img_fwd)
 contamination *= (0.5 * img_fwd.sum() / contamination.sum())
 
 # data is Poisson(Ax + s)
-sensitivity = 0.3
-data = xp.random.poisson(sensitivity * (img_fwd + contamination))
+data = xp.random.poisson(img_fwd + contamination)
 
 # calculate the gradient of a random image with respect to the data fidelity term
-
 random_img = xp.random.rand(*img_shape).astype(xp.float32)
-random_img_fwd = sensitivity * (projector.forward(random_img) + contamination)
+random_img_fwd = projector.forward(random_img) + contamination
 
 data_fidelity_gradient = projector.adjoint(
-    sensitivity * (1 - data / random_img_fwd).astype(xp.float32))
+    (1 - data / random_img_fwd).astype(xp.float32))
 
-#----------------------------------------------------
-#----------------------------------------------------
-# visualize results
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#--- visualizations --------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
 
 # get arrays from GPU
 if xp.__name__ == 'cupy':
