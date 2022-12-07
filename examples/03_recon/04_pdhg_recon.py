@@ -134,7 +134,7 @@ projector = petprojectors.PETJosephProjector(coincidence_descriptor,
 # simulate the attenuation factors (exp(-fwd(attenuation_image)))
 attenuation_factors = xp.exp(-projector.forward(attenuation_image))
 
-projector.tof_parameters = tof.ge_discoverymi_tof_parameters
+projector.tof_parameters = tof.ge_discovery_mi_tof_parameters
 
 #--------------------------------------------------------------------------
 # use an image-based resolution model in the projector to model the effect

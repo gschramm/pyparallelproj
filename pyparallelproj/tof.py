@@ -25,7 +25,7 @@ class TOFParameters(BaseModel):
         'offset of center of central TOF bin from LOR center in spatial units')
 
 
-ge_discoverymi_tof_parameters = TOFParameters(
+ge_discovery_mi_tof_parameters = TOFParameters(
     num_tofbins=29,
     tofbin_width=13 * 0.01302 * 299.792 /
     2,  # 13 TOF "small" TOF bins of 0.01302[ns] * (speed of light / 2) [mm/ns]

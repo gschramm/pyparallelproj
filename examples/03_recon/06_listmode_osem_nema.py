@@ -188,7 +188,7 @@ projector.multiplicative_correction_list = multiplicative_correction_list
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 
-projector.tof_parameters = tof.ge_discoverymi_tof_parameters
+projector.tof_parameters = tof.ge_discovery_mi_tof_parameters
 projector.listmode_subsetter.num_subsets = num_subsets
 
 print('starting reconstruction')

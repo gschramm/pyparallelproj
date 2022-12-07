@@ -67,7 +67,7 @@ projector = petprojectors.PETJosephProjector(coincidence_descriptor, img_shape,
 
 # setup the time-of-flight parameters of the projector to enable
 # time-of-flight projections
-projector.tof_parameters = tof.ge_discoverymi_tof_parameters
+projector.tof_parameters = tof.ge_discovery_mi_tof_parameters
 
 # generate a random multiplicative correction sinogram simulating constant sensitivity
 projector.multiplicative_corrections = xp.full(projector.output_shape, 0.3)
