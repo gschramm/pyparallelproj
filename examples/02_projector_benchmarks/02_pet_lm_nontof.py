@@ -40,7 +40,7 @@ num_events = args.num_events
 
 output_dir = args.output_dir
 if args.output_file is None:
-    output_file = f'nontoflistmode__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents{num_events}.csv'
+    output_file = f'nontoflistmode__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
 
 # image properties
 num_trans = 215
@@ -114,17 +114,8 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
                              image_fwd,
                              threadsperblock=threadsperblock)
         t1 = time.time()
-        if ir > 0:
-            tmp = pd.DataFrame(
-                {
-                    'symmetry axis': symmetry_axis,
-                    'direction': 'forward',
-                    'run': ir,
-                    'time (s)': t1 - t0
-                },
-                index=[0])
-            df = pd.concat((df, tmp))
 
+        # peform a back projection
         t2 = time.time()
         wrapper.joseph3d_back(xstart,
                               xend,
@@ -138,9 +129,9 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
             tmp = pd.DataFrame(
                 {
                     'symmetry axis': symmetry_axis,
-                    'direction': 'back',
                     'run': ir,
-                    'time (s)': t3 - t2
+                    't forward (s)': t1 - t0,
+                    't back (s)': t3 - t2
                 },
                 index=[0])
             df = pd.concat((df, tmp))
@@ -149,31 +140,3 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 # save results
 
 df.to_csv(os.path.join(output_dir, output_file), index=False)
-
-# plots
-
-df_sum = df.loc[df.direction == 'forward'].copy()
-df_sum['time (s)'] = df.loc[df.direction == 'forward']['time (s)'] + df.loc[
-    df.direction == 'back']['time (s)']
-df_sum['direction'] = 'forward+back'
-
-fig, ax = plt.subplots(1, 3, figsize=(3 * 4, 4), sharex=True, sharey=True)
-sns.barplot(data=df.loc[df.direction == 'forward'],
-            x='symmetry axis',
-            y='time (s)',
-            ax=ax[0])
-sns.barplot(data=df.loc[df.direction == 'back'],
-            x='symmetry axis',
-            y='time (s)',
-            ax=ax[1])
-sns.barplot(data=df_sum, x='symmetry axis', y='time (s)', ax=ax[2])
-
-ax[0].set_title('forward projection')
-ax[1].set_title('back projection')
-ax[2].set_title('forward + back projection')
-
-for axx in ax.ravel():
-    axx.grid(ls=':')
-
-fig.tight_layout()
-fig.show()
