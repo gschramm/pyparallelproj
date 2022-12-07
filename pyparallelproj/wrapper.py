@@ -42,7 +42,7 @@ def joseph3d_fwd(xstart: npt.NDArray | cpt.NDArray,
                  img_origin: npt.NDArray | cpt.NDArray,
                  voxsize: npt.NDArray | cpt.NDArray,
                  img_fwd: npt.NDArray | cpt.NDArray,
-                 threadsperblock: int = 64,
+                 threadsperblock: int = 32,
                  n_chunks: int = 1) -> None:
     """ 3D non-tof Joseph forward projector
 
@@ -132,7 +132,7 @@ def joseph3d_back(xstart: npt.NDArray | cpt.NDArray,
                   img_origin: npt.NDArray | cpt.NDArray,
                   voxsize: npt.NDArray | cpt.NDArray,
                   sino: npt.NDArray | cpt.NDArray,
-                  threadsperblock: int = 64,
+                  threadsperblock: int = 32,
                   n_chunks: int = 1):
     """ 3D non-tof Joseph back projector
 
@@ -234,7 +234,7 @@ def joseph3d_fwd_tof_sino(xstart: npt.NDArray | cpt.NDArray,
                           tofcenter_offset: npt.NDArray | cpt.NDArray,
                           nsigmas: float,
                           ntofbins: int,
-                          threadsperblock: int = 64,
+                          threadsperblock: int = 32,
                           n_chunks: int = 1):
     """ 3D tof sinogram Joseph forward projector
 
@@ -369,7 +369,7 @@ def joseph3d_back_tof_sino(xstart: npt.NDArray | cpt.NDArray,
                            tofcenter_offset: npt.NDArray | cpt.NDArray,
                            nsigmas: float,
                            ntofbins: int,
-                           threadsperblock: int = 64,
+                           threadsperblock: int = 32,
                            n_chunks: int = 1):
     """ 3D tof sinogram Joseph back projector
 
@@ -511,7 +511,7 @@ def joseph3d_fwd_tof_lm(xstart: npt.NDArray | cpt.NDArray,
                         tofcenter_offset: npt.NDArray | cpt.NDArray,
                         nsigmas: float,
                         tofbin: npt.NDArray | cpt.NDArray,
-                        threadsperblock: int = 64,
+                        threadsperblock: int = 32,
                         n_chunks: int = 1):
     """ 3D tof listmode Joseph forward projector
 
@@ -645,7 +645,7 @@ def joseph3d_back_tof_lm(xstart: npt.NDArray | cpt.NDArray,
                          tofcenter_offset: npt.NDArray | cpt.NDArray,
                          nsigmas: int,
                          tofbin: npt.NDArray | cpt.NDArray,
-                         threadsperblock: int = 64,
+                         threadsperblock: int = 32,
                          n_chunks: int = 1):
     """ 3D tof listmode Joseph back projector
 

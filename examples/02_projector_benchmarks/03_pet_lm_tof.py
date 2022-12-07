@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--num_runs', type=int, default=5)
 parser.add_argument('--num_events', type=int, default=10000000)
 parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
-parser.add_argument('--threadsperblock', type=int, default=64)
+parser.add_argument('--threadsperblock', type=int, default=32)
 parser.add_argument('--output_file', type=int, default=None)
 parser.add_argument('--output_dir', default='results')
 args = parser.parse_args()
@@ -158,5 +158,9 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 
 #---------------------------------------------------------------------
 # save results
+df['data'] = 'nontof_sinogram'
+df['mode'] = args.mode
+df['num_events'] = num_events
+df['threadsperblock'] = threadsperblock
 
 df.to_csv(os.path.join(output_dir, output_file), index=False)
