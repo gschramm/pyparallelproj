@@ -5,6 +5,7 @@ import seaborn as sns
 
 threadsperblock = 32
 data = 'nontofsinogram'
+res_path = Path('results') / '221208'
 sns.set_context('paper')
 
 #-----------------------------------------------------------------------------
@@ -12,15 +13,11 @@ sns.set_context('paper')
 df = pd.DataFrame()
 
 # read and analyse the TOF projections
-fnames_cpu = sorted(list(Path('results').glob(f'{data}__mode_CPU__*.csv')))
+fnames_cpu = sorted(list(res_path.glob(f'{data}__mode_CPU__*.csv')))
 fnames_hybrid = sorted(
-    list(
-        Path('results').glob(
-            f'{data}__mode_hybrid__*__tpb_{threadsperblock}*.csv')))
+    list(res_path.glob(f'{data}__mode_hybrid__*__tpb_{threadsperblock}*.csv')))
 fnames_gpu = sorted(
-    list(
-        Path('results').glob(
-            f'{data}__mode_GPU__*__tpb_{threadsperblock}*.csv')))
+    list(res_path.glob(f'{data}__mode_GPU__*__tpb_{threadsperblock}*.csv')))
 
 for result_file in (fnames_cpu + fnames_hybrid + fnames_gpu):
     print(result_file.name)

@@ -45,7 +45,7 @@ if args.presort:
 
 output_dir = args.output_dir
 if args.output_file is None:
-    output_file = f'{data_str}__{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
+    output_file = f'{data_str}__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
 
 # image properties
 num_trans = 215
