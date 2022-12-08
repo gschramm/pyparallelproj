@@ -64,8 +64,10 @@ sinogram_order = 'RVP'
 #-------------------
 # image parameters
 voxel_size = (2.78, 2.78, 2.78)
-image_shape = (135, 135, 71)
-#image_shape = (215, 215, 71)
+#image_shape = (135, 135, 71)
+image_shape = (215, 215, 71)
+
+presort = False
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
@@ -177,6 +179,11 @@ if xp.__name__ == 'cupy':
     events = xp.asarray(events)
     multiplicative_correction_list = xp.asarray(multiplicative_correction_list)
     contamination_list = xp.asarray(contamination_list)
+
+# sort events according to in-ring difference
+if presort:
+    print('pre-sorting events')
+    events = events[xp.argsort(events[:, 1] - events[:, 3]), :]
 
 # pass listmode events and multiplicative_correction_list to the projector
 projector.events = events
