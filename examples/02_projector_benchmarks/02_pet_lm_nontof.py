@@ -13,6 +13,7 @@ parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
 parser.add_argument('--threadsperblock', type=int, default=32)
 parser.add_argument('--output_file', type=int, default=None)
 parser.add_argument('--output_dir', default='results')
+parser.add_argument('--presort', action='store_true')
 args = parser.parse_args()
 
 if args.mode == 'GPU':
@@ -38,9 +39,13 @@ num_runs = args.num_runs
 threadsperblock = args.threadsperblock
 num_events = args.num_events
 
+data_str = 'nontof_listmode'
+if args.presort:
+    data_str += '_presorted'
+
 output_dir = args.output_dir
 if args.output_file is None:
-    output_file = f'nontoflistmode__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
+    output_file = f'{data_str}__{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
 
 # image properties
 num_trans = 215
@@ -76,6 +81,11 @@ events = events[ie, :]
 # so we divide the small tof bin number by 13 to get the bigger tof bins
 # the definition of the TOF bin sign is also reversed
 events[:, -1] = -(events[:, -1] // 13)
+
+# sort events according to in-ring difference
+if args.presort:
+    print('pre-sorting events')
+    events = events[xp.argsort(events[:, 1] - events[:, 3]), :]
 
 y = xp.ones(events.shape[0], dtype=xp.float32)
 
@@ -138,7 +148,7 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 
 #---------------------------------------------------------------------
 # save results
-df['data'] = 'nontof_sinogram'
+df['data'] = data_str
 df['mode'] = args.mode
 df['num_events'] = num_events
 df['threadsperblock'] = threadsperblock

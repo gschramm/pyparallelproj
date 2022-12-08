@@ -27,6 +27,7 @@ for result_file in (fnames_cpu + fnames_hybrid + fnames_gpu):
     df = pd.concat((df, pd.read_csv(result_file)))
 
 df['t forward+back (s)'] = df['t forward (s)'] + df['t back (s)']
+df['# events (1e6)'] = df['num_events'] / 1000000
 
 fig, ax = plt.subplots(3, 3, figsize=(7, 7), sharex=False, sharey='row')
 
@@ -36,19 +37,19 @@ for i, mode in enumerate(['CPU', 'hybrid', 'GPU']):
     df_mode = df.loc[df['mode'] == mode]
 
     sns.barplot(data=df_mode,
-                x='num_events',
+                x='# events (1e6)',
                 y='t forward (s)',
                 hue='symmetry axis',
                 ax=ax[i, 0],
                 **bplot_kwargs)
     sns.barplot(data=df_mode,
-                x='num_events',
+                x='# events (1e6)',
                 y='t back (s)',
                 hue='symmetry axis',
                 ax=ax[i, 1],
                 **bplot_kwargs)
     sns.barplot(data=df_mode,
-                x='num_events',
+                x='# events (1e6)',
                 y='t forward+back (s)',
                 hue='symmetry axis',
                 ax=ax[i, 2],
