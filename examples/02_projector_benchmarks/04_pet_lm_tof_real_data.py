@@ -234,9 +234,11 @@ ims = dict(cmap=plt.cm.Greys,
            origin='lower',
            vmin=0,
            vmax=0.35 * num_events / 4e7)
-ax[0, 0].imshow(x_lm[:, :, 51].T, **ims)
-ax[0, 1].imshow(x_lm[:, image_shape[1] // 2, :].T, **ims)
-ax[1, 0].imshow(x_lm_sm[:, :, 51].T, **ims)
-ax[1, 1].imshow(x_lm_sm[:, image_shape[1] // 2, :].T, **ims)
+ax[0, 0].imshow(np.take(x_lm, 51, axis=symmetry_axis).T, **ims)
+ax[0, 1].imshow(
+    np.take(x_lm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
+ax[1, 0].imshow(np.take(x_lm_sm, 51, axis=symmetry_axis).T, **ims)
+ax[1, 1].imshow(
+    np.take(x_lm_sm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
 fig.tight_layout()
 fig.show()
