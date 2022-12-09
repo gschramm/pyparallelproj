@@ -41,6 +41,8 @@ elif args.mode == 'CPU':
 else:
     raise ValueError
 
+xp.random.seed(1)
+
 import pyparallelproj.coincidences as coincidences
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
