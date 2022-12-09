@@ -1,43 +1,22 @@
 """OSEM reconstruction example using simulated brainweb data"""
-from time import time
 import argparse
 import os
 import numpy as np
-from scipy.ndimage import gaussian_filter
-import matplotlib.pyplot as plt
-import json
-from pathlib import Path
-import h5py
-
-np.random.seed(1)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--num_events', type=int, default=40000000)
-parser.add_argument('--num_iterations', type=int, default=4)
-parser.add_argument('--num_subsets', type=int, default=34)
-parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
-parser.add_argument('--threadsperblock', type=int, default=32)
-parser.add_argument('--output_file', type=int, default=None)
-parser.add_argument('--output_dir', default='results')
-parser.add_argument('--presort', action='store_true')
-parser.add_argument('--post_sm_fwhm', type=float, default=6.)
-parser.add_argument('--symmetry_axis', type=int, default=2, choices=[0, 1, 2])
+parser.add_argument('--symmetry_axis', type=int, default=1, choices=[0, 1, 2])
 args = parser.parse_args()
 
-presort = args.presort
-post_sm_fwhm = args.post_sm_fwhm
+mode = 'CPU'
 
-if args.mode == 'GPU':
+if mode == 'GPU':
     import cupy as cp
-    import cupyx.scipy.ndimage as ndi
     xp = cp
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-elif args.mode == 'hybrid':
-    import scipy.ndimage as ndi
+elif mode == 'hybrid':
     xp = np
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-elif args.mode == 'CPU':
-    import scipy.ndimage as ndi
+elif mode == 'CPU':
     xp = np
     os.environ['CUDA_VISIBLE_DEVICES'] = ''
 else:
@@ -46,16 +25,6 @@ else:
 import pyparallelproj.coincidences as coincidences
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
-import pyparallelproj.resolution_models as resolution_models
-import pyparallelproj.listmode_algorithms as lm_algorithms
-
-data_str = 'tof_listmode'
-if presort:
-    data_str += '_presorted'
-
-#output_dir = args.output_dir
-#if args.output_file is None:
-#    output_file = f'{data_str}__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
 
 # image properties
 num_trans = 215
@@ -68,11 +37,6 @@ symmetry_axis = args.symmetry_axis
 fwhm_mm_recon = 4.0
 tof_parameters = tof.ge_discovery_mi_tof_parameters
 
-# reconstruction parameters
-num_iterations = args.num_iterations
-num_subsets = args.num_subsets
-threadsperblock = args.threadsperblock
-num_events = args.num_events
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 #--- define the scanner geometry -------------------------------------
@@ -101,6 +65,6 @@ projector = petprojectors.PETJosephProjector(coincidence_descriptor,
 
 projector.tof_parameters = tof.ge_discovery_mi_tof_parameters
 
-for i in np.arange(-13, 14):
-    projector.events = xp.array([[19, 466, 15, 235, i]], dtype=xp.int16)
-    print(projector.forward_listmode(xp.ones(image_shape, dtype=xp.float32)))
+tofbin = 0
+projector.events = xp.array([[19, 466, 15, 235, tofbin]], dtype=xp.int16)
+print(projector.forward_listmode(xp.ones(image_shape, dtype=xp.float32)))
