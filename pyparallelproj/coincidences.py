@@ -276,7 +276,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
         radial_trim: int = 3,
         max_ring_difference: int | None = None,
         sinogram_spatial_axis_order:
-        SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR
+        SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.RVP
     ) -> None:
         """Coincidence descriptor for a regular polygon PET scanner where
            we have coincidences within and between "rings (polygons of modules)" 
@@ -293,7 +293,7 @@ class RegularPolygonPETCoincidenceDescriptor(PETCoincidenceDescriptor):
             maximim ring difference to consider for coincidences, by default None means
             all ring differences are included
         sinogram_spatial_axis_order : SinogramSpatialAxisOrder, optional
-            order of the spatial axis in the sinogram, by default SinogramSpatialAxisOrder.PVR
+            order of the spatial axis in the sinogram, by default SinogramSpatialAxisOrder.RVP
             which means "planes", "views", "radial"
         """
 
@@ -618,7 +618,7 @@ class GEDiscoveryMICoincidenceDescriptor(RegularPolygonPETCoincidenceDescriptor
                  radial_trim: int = 65,
                  max_ring_difference: int | None = None,
                  sinogram_spatial_axis_order:
-                 SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.PVR,
+                 SinogramSpatialAxisOrder = SinogramSpatialAxisOrder.RVP,
                  symmetry_axis: int = 2,
                  xp: types.ModuleType = np) -> None:
 
