@@ -1,11 +1,22 @@
+import argparse
 from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-threadsperblock = 32
-data = 'tof_listmode'
-res_path = Path('results') / '221208'
+parser = argparse.ArgumentParser()
+parser.add_argument('dir')
+parser.add_argument(
+    '--data',
+    default='tof_listmode',
+    choices=['tof_listmode', 'tof_listmode_presorted', 'nontof_listmode'])
+parser.add_argument('--tpb', type=int, default=32)
+
+args = parser.parse_args()
+
+threadsperblock = args.tpb
+data = args.data
+res_path = Path('results') / args.dir
 sns.set_context('paper')
 
 #-----------------------------------------------------------------------------
