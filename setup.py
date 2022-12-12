@@ -1,11 +1,9 @@
 import setuptools
-import os
-from glob import glob
 
 setuptools.setup(
     name="pyparallelproj",
     use_scm_version={'fallback_version': 'unkown'},
-    setup_requires=['setuptools_scm', 'setuptools_scm_git_archive'],
+    setup_requires=['setuptools_scm'],
     author="Georg Schramm,",
     author_email="georg.schramm@kuleuven.be",
     description=
@@ -22,6 +20,6 @@ setuptools.setup(
     python_requires='>=3.10',
     install_requires=[
         'numpy>=1.18', 'matplotlib>=3.2.1', 'numba>=0.49', 'scipy>=1.2',
-        'attrs>=22.0', 'pydantic>=1.10'
+        'pydantic>=1.10', 'parallelproj>=1.2.9'
     ],
     include_package_data=True)
