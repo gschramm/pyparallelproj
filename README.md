@@ -42,24 +42,28 @@ export PYTHONPATH=/my/path/to/pyparallelproj
 
 ## Test the installation
 
-To test whether the python package was installed correctly run the following in python.
+To test whether the `pyparallelproj` python package can be imported
+and whether the compiled `parallelproj` OpenMP library was installed
+run:
 
 ```python
-import pyparallelproj as ppp
+import pyparallelproj
+import pyparallelproj.config as config
 ```
 
-To test whether the compiled OpenMP lib is installed correctly run
+If you run this on a system without CUDA, it should print sth like:
 
-```python
-import pyparallelproj as ppp
-print(ppp.config.lib_parallelproj_c)
+```
+.../pyparallelproj/pyparallelproj/config.py:29: UserWarning: CUDA not available
+  warn('CUDA not available')
+using PARALLELPROJ_C_LIB .../miniforge/base/envs/parallelproj/bin/../lib/libparallelproj_c.so
 ```
 
-If the CUDA lib was compiled, test the installation via
+On a system with CUDA, it should print
 
-```python
-import pyparallelproj as ppp
-print(ppp.config.lib_parallelproj_cuda)
+```
+using PARALLELPROJ_C_LIB .../miniforge/base/envs/parallelproj/bin/../lib/libparallelproj_c.so
+using PARALLELPROJ_CUDA_LIB .../miniforge/base/envs/parallelproj/bin/../lib/libparallelproj_cuda.so
 ```
 
 ## Run examples
