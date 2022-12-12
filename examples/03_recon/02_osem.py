@@ -29,7 +29,7 @@ except:
 
 # variable that determines whether to use cupy (cp) or numpy (np) array for computations
 # if cupy (cp), there is no memory transfer between host and GPU
-xp = cp
+xp = np
 
 if xp.__name__ == 'cupy':
     import cupyx.scipy.ndimage as ndi
@@ -49,7 +49,7 @@ num_subsets = 34
 
 #-------------------
 # scanner parameters
-num_rings = 18
+num_rings = 1
 symmetry_axis = 0
 fwhm_mm_data = 4.5
 fwhm_mm_recon = 4.5

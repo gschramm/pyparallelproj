@@ -10,3 +10,4 @@ dependencies:
   - scipy>=1.2
   - cmake>=3.9
   - pydantic>=1.10
+  - parallelproj>=1.2.9
