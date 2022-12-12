@@ -1,7 +1,6 @@
 """1D demo for PDHG"""
 import numpy as np
 import matplotlib.pyplot as plt
-import nibabel as nib
 
 import pyparallelproj.operators as operators
 import pyparallelproj.functionals as functionals
