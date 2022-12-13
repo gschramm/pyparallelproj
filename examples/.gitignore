@@ -6,3 +6,5 @@ figs/*
 test*
 *.npy
 *.npz
+*.csv
+*.sh
