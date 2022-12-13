@@ -67,3 +67,12 @@ using PARALLELPROJ_CUDA_LIB .../miniforge/base/envs/parallelproj/bin/../lib/libp
 ```
 
 ## Run examples
+
+The examples contrains a few educational examples that show how to use `pyparallelproj`
+on different levels.
+
+- `00_projections_and_reconstruction` contains high level examples on how to do
+  nonTOF and TOF projections and how to run simple reconstructions
+- `01_defining_scanner_geometries` shows how to define custom PET scanners
+- `02_low_level_parallelproj_api` shows how to use the `parallelproj` API on a
+  lower level
