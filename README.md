@@ -76,3 +76,10 @@ on different levels.
 - `01_defining_scanner_geometries` shows how to define custom PET scanners
 - `02_low_level_parallelproj_api` shows how to use the `parallelproj` API on a
   lower level
+
+**Note**: To run certain examples, you need to install extra python packages (e.g. h5py, nibabel, pandas).
+All of those are available on conda-forge, such that they can be installed via
+
+```
+conda install conda-forge mypackage-of-choice
+```
