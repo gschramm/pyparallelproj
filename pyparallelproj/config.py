@@ -287,16 +287,15 @@ if n_visible_gpus > 0:
             warn('cupy package is not available.')
         else:
             # find all cuda kernel files installed with the parallelproj libs
-            kernel_files = list(
-                Path(lib_parallelproj_cuda_fname).parent.glob(
-                    'projector_kernels.cu.*'))
+            kernel_files = sorted(list(
+                (Path(lib_parallelproj_cuda_fname).parents[1] / 'lib').glob(
+                    'projector_kernels.cu.*')))
             kernel_file = None
-            for k_file in kernel_files:
-                tmp = str(k_file).split('.cu.')
-                if len(tmp) > 1:
-                    k_file_version = tmp[1]
-                    if lib_parallelproj_cuda_fname.endswith(k_file_version):
-                        kernel_file = str(k_file)
+            if len(kernel_files) == 1:
+                kernel_file = kernel_files[0] 
+            elif len(kernel_files) > 1:
+                kernel_file = kernel_files[-1] 
+                warn('More than one kernel file available.')
 
             if kernel_file is not None:
                 print(f'loading cupy cuda kernels from {kernel_file}')
