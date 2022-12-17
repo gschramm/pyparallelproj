@@ -78,4 +78,5 @@ for i, axx in enumerate(ax[1:, :].ravel()):
     axx.set_ylim(0, gpu_ymax)
 
 fig.tight_layout()
+fig.savefig(res_path / f'{data}_{threadsperblock}.pdf')
 fig.show()
