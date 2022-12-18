@@ -11,7 +11,7 @@ import h5py
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_events', type=int, default=40000000)
-parser.add_argument('--num_iterations', type=int, default=4)
+parser.add_argument('--num_iterations', type=int, default=6)
 parser.add_argument('--num_subsets', type=int, default=34)
 parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
 parser.add_argument('--threadsperblock', type=int, default=32)
@@ -49,13 +49,9 @@ import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.resolution_models as resolution_models
 import pyparallelproj.listmode_algorithms as lm_algorithms
 
-data_str = 'tof_listmode'
+data_str = 'nema_tof_listmode'
 if presort:
     data_str += '_presorted'
-
-#output_dir = args.output_dir
-#if args.output_file is None:
-#    output_file = f'{data_str}__mode_{args.mode}__numruns_{num_runs}__tpb_{threadsperblock}__numevents_{num_events}.csv'
 
 # image properties
 num_trans = 215
@@ -65,7 +61,7 @@ voxel_size = (2.78, 2.78, 2.78)
 # scanner properties
 num_rings = 36
 symmetry_axis = args.symmetry_axis
-fwhm_mm_recon = 4.0
+fwhm_mm_recon = 4.5
 tof_parameters = tof.ge_discovery_mi_tof_parameters
 
 # reconstruction parameters
@@ -73,6 +69,11 @@ num_iterations = args.num_iterations
 num_subsets = args.num_subsets
 threadsperblock = args.threadsperblock
 num_events = args.num_events
+
+output_dir = args.output_dir
+if args.output_file is None:
+    output_file = f'{data_str}__mode_{args.mode}__tpb_{threadsperblock}__numevents_{num_events}__axis_{symmetry_axis}.json'
+
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 #--- define the scanner geometry -------------------------------------
@@ -216,6 +217,23 @@ listmode_reconstructor.run(num_iterations)
 x_lm = listmode_reconstructor.x
 
 print(f'time per iteration {np.diff(listmode_reconstructor.walltime)}s')
+
+res = {
+    'iteration times (s)': np.diff(listmode_reconstructor.walltime).tolist(),
+    'iteration time mean (s)': np.diff(listmode_reconstructor.walltime).mean(),
+    'iteration time std (s)': np.diff(listmode_reconstructor.walltime).std(),
+    'num_iterations': num_iterations,
+    'num_subsets': num_subsets,
+    'num_events': num_events,
+    'presort': presort,
+    'mode': args.mode,
+    'symmetry_axis': symmetry_axis,
+    'tpb': threadsperblock,
+    'fwhm_mm_recon': fwhm_mm_recon
+}
+
+with open(Path(output_dir) / output_file, 'w') as f:
+    json.dump(res, f)
 
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
