@@ -219,7 +219,7 @@ x_lm = listmode_reconstructor.x
 print(f'time per iteration {np.diff(listmode_reconstructor.walltime)}s')
 
 res = {
-    'iteration times (s)': np.diff(listmode_reconstructor.walltime).tolist(),
+    'iteration time (s)': np.diff(listmode_reconstructor.walltime).tolist(),
     'iteration time mean (s)': np.diff(listmode_reconstructor.walltime).mean(),
     'iteration time std (s)': np.diff(listmode_reconstructor.walltime).std(),
     'num_iterations': num_iterations,
@@ -227,7 +227,7 @@ res = {
     'num_events': num_events,
     'presort': presort,
     'mode': args.mode,
-    'symmetry_axis': symmetry_axis,
+    'symmetry axis': symmetry_axis,
     'tpb': threadsperblock,
     'fwhm_mm_recon': fwhm_mm_recon
 }
@@ -257,6 +257,6 @@ ax[0, 1].imshow(
     np.take(x_lm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
 ax[1, 0].imshow(np.take(x_lm_sm, 51, axis=symmetry_axis).T, **ims)
 ax[1, 1].imshow(
-    np.take(x_lm_sm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
+    np.take(x_lm_sm, num_trans // 2, axis=((symmetry axis + 2) % 3)).T, **ims)
 fig.tight_layout()
 fig.show()
