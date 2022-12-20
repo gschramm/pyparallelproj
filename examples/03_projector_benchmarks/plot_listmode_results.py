@@ -11,10 +11,12 @@ parser.add_argument(
     default='tof_listmode',
     choices=['tof_listmode', 'tof_listmode_presorted', 'nontof_listmode'])
 parser.add_argument('--tpb', type=int, default=32)
+parser.add_argument('--norm', action='store_true')
 
 args = parser.parse_args()
 
 threadsperblock = args.tpb
+norm = args.norm
 data = args.data
 res_path = Path('results') / args.dir
 sns.set_context('paper')
@@ -34,8 +36,13 @@ for result_file in (fnames_cpu + fnames_hybrid + fnames_gpu):
     print(result_file.name)
     df = pd.concat((df, pd.read_csv(result_file)))
 
-df['t forward+back (s)'] = df['t forward (s)'] + df['t back (s)']
 df['# events (1e6)'] = df['num_events'] / 1000000
+
+if norm:
+    df['t forward (s)'] /= df['# events (1e6)']
+    df['t back (s)'] /= df['# events (1e6)']
+
+df['t forward+back (s)'] = df['t forward (s)'] + df['t back (s)']
 
 fig, ax = plt.subplots(3, 3, figsize=(7, 7), sharex=False, sharey='row')
 
