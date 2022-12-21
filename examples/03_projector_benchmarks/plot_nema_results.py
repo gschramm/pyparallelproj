@@ -8,10 +8,12 @@ import seaborn as sns
 parser = argparse.ArgumentParser()
 parser.add_argument('dir')
 parser.add_argument('--tpb', type=int, default=32)
+parser.add_argument('--norm', action='store_true')
 
 args = parser.parse_args()
 
 threadsperblock = args.tpb
+norm = args.norm
 res_path = Path('results') / args.dir
 sns.set_context('paper')
 
@@ -32,6 +34,9 @@ for result_file in (fnames_cpu + fnames_hybrid + fnames_gpu):
         df = pd.concat((df, pd.DataFrame(json.load(f))))
 
 df['# events (1e6)'] = df['num_events'] / 1000000
+
+if norm:
+    df['iteration time (s)'] /= df['# events (1e6)']
 
 fig, ax = plt.subplots(1, 3, figsize=(7, 7 / 3), sharex=True)
 
