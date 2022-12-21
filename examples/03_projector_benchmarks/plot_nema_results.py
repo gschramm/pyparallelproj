@@ -40,7 +40,7 @@ if norm:
 
 fig, ax = plt.subplots(1, 3, figsize=(7, 7 / 3), sharex=True)
 
-bplot_kwargs = dict(capsize=0.15, errwidth=1.5)
+bplot_kwargs = dict(capsize=0.15, errwidth=1.5, errorbar='sd')
 
 for i, mode in enumerate(['CPU', 'hybrid', 'GPU']):
     df_mode = df.loc[df['mode'] == mode]
