@@ -2,11 +2,11 @@ import abc
 import numpy as np
 import numpy.typing as npt
 
-import pyparallelproj.coincidences as coincidences
-import pyparallelproj.wrapper as wrapper
-import pyparallelproj.subsets as subsets
-import pyparallelproj.operators as operators
-import pyparallelproj.tof as tof
+from . import coincidences
+from . import wrapper
+from . import subsets
+from . import operators
+from . import tof
 
 try:
     import cupy.typing as cpt

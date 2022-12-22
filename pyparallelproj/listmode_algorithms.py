@@ -4,8 +4,7 @@ from time import time
 import numpy as np
 import numpy.typing as npt
 
-import pyparallelproj.operators as operators
-import pyparallelproj.functionals as functionals
+from . import operators
 
 try:
     import cupy.typing as cpt

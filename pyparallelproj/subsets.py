@@ -5,7 +5,7 @@ import math
 import numpy as np
 import numpy.typing as npt
 
-import pyparallelproj.coincidences as coincidences
+from . import coincidences
 
 
 class Subsetter(abc.ABC):

@@ -12,7 +12,7 @@ except:
     import numpy as np
     import numpy.typing as cpt
 
-import pyparallelproj.subsets as subsets
+from . import subsets
 
 
 class LinearOperator(abc.ABC):

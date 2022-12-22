@@ -10,7 +10,7 @@ except:
 
 import matplotlib.pyplot as plt
 
-import pyparallelproj.scannermodules as mods
+from . import scannermodules as mods
 
 
 class ModularizedPETScannerGeometry:

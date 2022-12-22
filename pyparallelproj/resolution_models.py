@@ -8,7 +8,7 @@ except:
     warnings.warn('cupy module not available')
     import numpy.typing as cpt
 
-import pyparallelproj.operators as operators
+from . import operators
 
 
 class GaussianImageBasedResolutionModel(operators.LinearOperator):
