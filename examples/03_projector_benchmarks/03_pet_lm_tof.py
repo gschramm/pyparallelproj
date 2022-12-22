@@ -8,7 +8,7 @@ import h5py
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_runs', type=int, default=5)
-parser.add_argument('--num_events', type=int, default=10000000)
+parser.add_argument('--num_events', type=int, default=40000000)
 parser.add_argument('--mode', default='GPU', choices=['GPU', 'CPU', 'hybrid'])
 parser.add_argument('--threadsperblock', type=int, default=32)
 parser.add_argument('--output_file', type=int, default=None)

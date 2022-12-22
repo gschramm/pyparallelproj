@@ -18,7 +18,7 @@ parser.add_argument('--threadsperblock', type=int, default=32)
 parser.add_argument('--output_file', type=int, default=None)
 parser.add_argument('--output_dir', default='results')
 parser.add_argument('--presort', action='store_true')
-parser.add_argument('--post_sm_fwhm', type=float, default=6.)
+parser.add_argument('--post_sm_fwhm', type=float, default=4.)
 parser.add_argument('--symmetry_axis', type=int, default=2, choices=[0, 1, 2])
 args = parser.parse_args()
 
@@ -54,9 +54,9 @@ if presort:
     data_str += '_presorted'
 
 # image properties
-num_trans = 215
-num_ax = 71
 voxel_size = (2.78, 2.78, 2.78)
+num_trans = int(215 * 2.78 / voxel_size[0])
+num_ax = 71
 
 # scanner properties
 num_rings = 36
@@ -247,16 +247,29 @@ if xp.__name__ == 'cupy':
 
 x_lm_sm = gaussian_filter(x_lm, post_sm_fwhm / (2.35 * np.array(voxel_size)))
 
-fig, ax = plt.subplots(2, 2, figsize=(8, 8), sharex='col', sharey='col')
 ims = dict(cmap=plt.cm.Greys,
            origin='lower',
            vmin=0,
-           vmax=0.35 * num_events / 4e7)
-ax[0, 0].imshow(np.take(x_lm, 51, axis=symmetry_axis).T, **ims)
-ax[0, 1].imshow(
-    np.take(x_lm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
-ax[1, 0].imshow(np.take(x_lm_sm, 51, axis=symmetry_axis).T, **ims)
-ax[1, 1].imshow(
-    np.take(x_lm_sm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
+           vmax=0.35 * num_events / 4e7,
+           interpolation='bilinear')
+
+fig, ax = plt.subplots(1, 2, figsize=(8, 4), sharex='col', sharey='col')
+ax[0].imshow(np.take(x_lm, 51, axis=symmetry_axis)[50:-50, 60:-60].T, **ims)
+ax[1].imshow(
+    np.take(x_lm, num_trans // 2, axis=((symmetry_axis + 2) % 3))[50:-50, :].T,
+    **ims)
+for axx in ax:
+    axx.set_axis_off()
 fig.tight_layout()
 fig.show()
+
+fig2, ax2 = plt.subplots(1, 2, figsize=(8, 4), sharex='col', sharey='col')
+ax2[0].imshow(
+    np.take(x_lm_sm, 51, axis=symmetry_axis)[50:-50, 60:-60].T, **ims)
+ax2[1].imshow(
+    np.take(x_lm_sm, num_trans // 2,
+            axis=((symmetry_axis + 2) % 3))[50:-50, :].T, **ims)
+for axx in ax2:
+    axx.set_axis_off()
+fig2.tight_layout()
+fig2.show()
