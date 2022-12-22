@@ -257,6 +257,6 @@ ax[0, 1].imshow(
     np.take(x_lm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
 ax[1, 0].imshow(np.take(x_lm_sm, 51, axis=symmetry_axis).T, **ims)
 ax[1, 1].imshow(
-    np.take(x_lm_sm, num_trans // 2, axis=((symmetry axis + 2) % 3)).T, **ims)
+    np.take(x_lm_sm, num_trans // 2, axis=((symmetry_axis + 2) % 3)).T, **ims)
 fig.tight_layout()
 fig.show()
