@@ -36,9 +36,9 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
         self._voxel_size = voxel_size
 
         self._tof_parameters: tof.TOFParameters | None = None
-        self._image_based_resolution_model: npt.NDArray | cpt.NDArray | None = None
+        self._image_based_resolution_model: operators.LinearOperator | None = None
         self._multiplicative_corrections: npt.NDArray | cpt.NDArray | None = None
-        self._multiplicative_correction_list: operators.LinearOperator | None = None
+        self._multiplicative_correction_list: npt.NDArray | cpt.NDArray | None = None
 
         super().__init__(self.image_shape, self.output_shape,
                          self.coincidence_descriptor.scanner.xp, subsetter)
