@@ -13,7 +13,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import nibabel as nib
 
-import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
 import pyparallelproj.subsets as subsets
 import pyparallelproj.tof as tof
@@ -179,10 +178,16 @@ data = xp.random.poisson(image_fwd + contamination).astype(xp.uint16)
 non_zero_bins = xp.where(data > 0)
 non_zero_data = data[non_zero_bins]
 
-lor_nums = np.repeat(xp.asnumpy(non_zero_bins[0]), xp.asnumpy(non_zero_data))
-tof_bins = np.repeat(
-    xp.asnumpy(non_zero_bins[1]),
-    xp.asnumpy(non_zero_data)) - projector.tof_parameters.num_tofbins // 2
+
+if xp.__name__ == 'cupy':
+    lor_nums = np.repeat(xp.asnumpy(non_zero_bins[0]), xp.asnumpy(non_zero_data))
+    tof_bins = np.repeat(
+        xp.asnumpy(non_zero_bins[1]),
+        xp.asnumpy(non_zero_data)) - projector.tof_parameters.num_tofbins // 2
+else:
+    lor_nums = np.repeat(non_zero_bins[0], non_zero_data)
+    tof_bins = np.repeat(non_zero_bins[1],
+        non_zero_data) - projector.tof_parameters.num_tofbins // 2
 
 # get the detecor numbers from the LOR numbers of the events
 start_mod, start_ind, end_mod, end_ind = coincidence_descriptor.get_lor_indices(
