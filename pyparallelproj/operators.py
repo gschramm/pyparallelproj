@@ -4,12 +4,10 @@ import types
 import numpy.typing as npt
 
 try:
-    import cupy as cp
     import cupy.typing as cpt
 except:
     import warnings
     warnings.warn('cupy module not available')
-    import numpy as np
     import numpy.typing as cpt
 
 from . import subsets
