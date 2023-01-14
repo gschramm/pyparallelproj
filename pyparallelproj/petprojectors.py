@@ -7,6 +7,7 @@ from . import wrapper
 from . import subsets
 from . import operators
 from . import tof
+from . import listmode
 
 try:
     import cupy.typing as cpt
@@ -42,6 +43,27 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
 
         super().__init__(self.image_shape, self.output_shape,
                          self.coincidence_descriptor.scanner.xp, subsetter)
+
+        self._events: listmode.PETListmodeEvents = listmode.GenericPETListmodeEvents(
+            self.xp.zeros(1).astype(self.xp.int16),
+            self.xp.zeros(1).astype(self.xp.int16),
+            self.xp.zeros(1).astype(self.xp.int16),
+            self.xp.zeros(1).astype(self.xp.int16),
+            self.xp.zeros(1).astype(self.xp.int16),
+            self._coincidence_descriptor.scanner)
+
+    @property
+    def events(self) -> listmode.PETListmodeEvents:
+        return self._events
+
+    @events.setter
+    def events(self, value: listmode.PETListmodeEvents) -> None:
+        self._events = value
+        self._listmode_subsetter.num_elements = self._events.num_events
+
+    @property
+    def num_events(self) -> int:
+        return self._events.num_events
 
     @property
     def output_shape(self) -> tuple[int, ...]:
@@ -281,12 +303,8 @@ class PETJosephProjector(PETProjector):
             self, x: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
-        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            self.events[subset_inds, 0],
-            self.events[subset_inds, 1]).astype(self.xp.float32)
-        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            self.events[subset_inds, 2],
-            self.events[subset_inds, 3]).astype(self.xp.float32)
+        xstart = self.events.get_event_lor_start_coordinates(subset_inds)
+        xend = self.events.get_event_lor_end_coordinates(subset_inds)
 
         image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)
 
@@ -295,7 +313,8 @@ class PETJosephProjector(PETProjector):
                                  self.image_origin, self.voxel_size,
                                  image_forward)
         else:
-            tofbin = self._events[subset_inds, 4].astype(self._xp.int16)
+            tofbin = self.xp.ascontiguousarray(
+                self.events.get_event_tof_bins(subset_inds))
 
             wrapper.joseph3d_fwd_tof_lm(
                 xstart, xend, x.astype(self.xp.float32), self.image_origin,
@@ -313,12 +332,8 @@ class PETJosephProjector(PETProjector):
             self, y_subset: npt.NDArray | cpt.NDArray,
             subset_inds: slice | npt.NDArray) -> npt.NDArray | cpt.NDArray:
 
-        xstart = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            self.events[subset_inds, 0],
-            self.events[subset_inds, 1]).astype(self.xp.float32)
-        xend = self.coincidence_descriptor.scanner.get_lor_endpoints(
-            self.events[subset_inds, 2],
-            self.events[subset_inds, 3]).astype(self.xp.float32)
+        xstart = self.events.get_event_lor_start_coordinates(subset_inds)
+        xend = self.events.get_event_lor_end_coordinates(subset_inds)
 
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
 
@@ -327,7 +342,8 @@ class PETJosephProjector(PETProjector):
                                   self.voxel_size,
                                   y_subset.astype(self.xp.float32))
         else:
-            tofbin = self.events[subset_inds, 4].astype(self._xp.int16)
+            tofbin = self.xp.ascontiguousarray(
+                self.events.get_event_tof_bins(subset_inds))
 
             wrapper.joseph3d_back_tof_lm(
                 xstart, xend, back_image, self.image_origin, self.voxel_size,
