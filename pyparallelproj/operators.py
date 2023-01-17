@@ -355,10 +355,11 @@ class LinearListmodeSubsetOperator(LinearSubsetOperator):
         """
 
         super().__init__(input_shape, output_shape, xp, subsetter)
-        self._events = xp.zeros((1, 4), dtype=xp.int16)
+        self._listmode_subsetter = subsets.Strided1DSubsetter(1, 1)
 
-        self._listmode_subsetter: subsets.Strided1DSubsetter = subsets.Strided1DSubsetter(
-            self.events.shape[0], 1)
+    @property
+    def num_events(self) -> int:
+        raise NotImplementedError
 
     @property
     def listmode_subsetter(self) -> subsets.Strided1DSubsetter:
@@ -368,19 +369,10 @@ class LinearListmodeSubsetOperator(LinearSubsetOperator):
     def listmode_subsetter(self, value: subsets.Strided1DSubsetter) -> None:
         self._listmode_subsetter = value
 
-    @property
-    def events(self) -> npt.NDArray | cpt.NDArray:
-        return self._events
-
-    @events.setter
-    def events(self, value: npt.NDArray | cpt.NDArray) -> None:
-        self._events = value
-        self._listmode_subsetter.num_elements = self._events.shape[0]
-
     def forward_listmode(
             self, x: npt.NDArray | cpt.NDArray) -> npt.NDArray | cpt.NDArray:
 
-        x_forward = self.xp.zeros(self.events.shape[0], dtype=self.xp.float32)
+        x_forward = self.xp.zeros(self.num_events, dtype=self.xp.float32)
 
         for subset in range(self.listmode_subsetter.num_subsets):
             subset_inds = self.listmode_subsetter.get_subset_indices(subset)

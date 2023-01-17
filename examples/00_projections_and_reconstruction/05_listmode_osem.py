@@ -13,13 +13,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import nibabel as nib
 
-import pyparallelproj.scanners as scanners
 import pyparallelproj.coincidences as coincidences
 import pyparallelproj.subsets as subsets
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.resolution_models as resolution_models
 import pyparallelproj.algorithms as algorithms
+import pyparallelproj.listmode as lm
 import pyparallelproj.listmode_algorithms as lm_algorithms
 
 try:
@@ -179,30 +179,48 @@ data = xp.random.poisson(image_fwd + contamination).astype(xp.uint16)
 non_zero_bins = xp.where(data > 0)
 non_zero_data = data[non_zero_bins]
 
-lor_nums = np.repeat(xp.asnumpy(non_zero_bins[0]), xp.asnumpy(non_zero_data))
-tof_bins = np.repeat(
-    xp.asnumpy(non_zero_bins[1]),
-    xp.asnumpy(non_zero_data)) - projector.tof_parameters.num_tofbins // 2
+if xp.__name__ == 'cupy':
+    lor_nums = np.repeat(xp.asnumpy(non_zero_bins[0]),
+                         xp.asnumpy(non_zero_data))
+    tof_bins = np.repeat(
+        xp.asnumpy(non_zero_bins[1]),
+        xp.asnumpy(non_zero_data)) - projector.tof_parameters.num_tofbins // 2
+else:
+    lor_nums = np.repeat(non_zero_bins[0], non_zero_data)
+    tof_bins = np.repeat(
+        non_zero_bins[1],
+        non_zero_data) - projector.tof_parameters.num_tofbins // 2
 
 # get the detecor numbers from the LOR numbers of the events
 start_mod, start_ind, end_mod, end_ind = coincidence_descriptor.get_lor_indices(
     lor_nums)
 
-events = xp.array([start_mod, start_ind, end_mod, end_ind, tof_bins]).T
+#events = xp.array([start_mod, start_ind, end_mod, end_ind, tof_bins]).T
 
 contamination_list = contamination[lor_nums, tof_bins]
 multiplicative_correction_list = attenuation_factors[
     lor_nums] * scanner_sensitivty
 
 ## shuffle the events
-event_index = np.arange(events.shape[0])
+event_index = np.arange(start_mod.shape[0])
 np.random.shuffle(event_index)
 
-events = events[event_index, :]
+start_mod = start_mod[event_index]
+start_ind = start_ind[event_index]
+end_mod = end_mod[event_index]
+end_ind = end_ind[event_index]
+tof_bins = tof_bins[event_index]
+
 contamination_list = contamination_list[event_index]
 multiplicative_correction_list = multiplicative_correction_list[event_index]
 
-projector.events = events
+projector.events = lm.GenericPETListmodeEvents(start_mod,
+                                               start_ind,
+                                               end_mod,
+                                               end_ind,
+                                               tof_bins,
+                                               coincidence_descriptor.scanner,
+                                               precalculate_coords=True)
 projector.multiplicative_correction_list = multiplicative_correction_list
 
 adjoint_ones = projector.adjoint(
