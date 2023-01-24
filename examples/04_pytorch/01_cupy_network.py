@@ -7,7 +7,6 @@ import cupy as cp
 class MiniCupyNetwork(torch.nn.Module):
 
     def __init__(self) -> None:
-        self._device = device
         super(MiniCupyNetwork, self).__init__()
         # setup a simple mode - in real life probably more complicated
         self.simple_conv_stack = torch.nn.Sequential(
