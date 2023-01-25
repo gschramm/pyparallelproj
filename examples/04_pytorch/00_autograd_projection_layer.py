@@ -173,8 +173,8 @@ if __name__ == '__main__':
     Q2 = pet_adjoint_layer(y, proj).sum()
 
     # define a layer involving forward and backward projection
-    # this layer would be the gradient of an L2 squared data fidelity term
-    Q3 = pet_adjoint_layer(pet_fwd_layer(x, proj) - d, proj).sum()
+    # this layer would be the gradient of a Poisson log likelihood data fidelity term
+    Q3 = pet_adjoint_layer(1 - d / pet_fwd_layer(x, proj), proj).sum()
 
     # check the gradients using gradcheck
     grad_test_fwd = torch.autograd.gradcheck(pet_fwd_layer, (x, proj),
