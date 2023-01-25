@@ -13,6 +13,8 @@ import cupy.typing as cpt
 class PETProjector:
     """dummy PET projector that maps a 3D array into a 4D array using
        a random dense matrix
+
+       implemented to test pytorch autograd functions
     """
 
     def __init__(
@@ -57,14 +59,13 @@ class PETFwdProjectionLayer(torch.autograd.Function):
         ctx.set_materialize_grads(False)
         ctx.pet_projector = pet_projector
 
+        # convert pytorch input tensor into cupy array
         cp_x = cp.ascontiguousarray(cp.from_dlpack(x.detach()))
 
-        # a custom function written in cp
+        # a custom function that maps from cupy array to cupy array
         cp_y = pet_projector.forward(cp_x)
 
-        torch_y = torch.from_dlpack(cp_y)
-
-        return torch_y
+        return torch.from_dlpack(cp_y)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -82,12 +83,64 @@ class PETFwdProjectionLayer(torch.autograd.Function):
         else:
             pet_projector = ctx.pet_projector
 
+            # convert torch array to cupy array
             cp_grad_output = cp.from_dlpack(grad_output.detach())
 
-            torch_grad = torch.from_dlpack(
-                pet_projector.adjoint(cp_grad_output))
+            # since forward takes two input arguments (x and projector)
+            # we have to return two arguments (the latter is None)
+            return torch.from_dlpack(
+                pet_projector.adjoint(cp_grad_output)), None
 
-            return torch_grad, None
+
+class PETAdjointProjectionLayer(torch.autograd.Function):
+    """
+    We can implement our own custom autograd Functions by subclassing
+    torch.autograd.Function and implementing the forward and backward passes
+    which operate on Tensors.
+    """
+
+    @staticmethod
+    def forward(ctx, x, pet_projector: PETProjector):
+        """
+        In the forward pass we receive a Tensor containing the input and return
+        a Tensor containing the output. ctx is a context object that can be used
+        to stash information for backward computation.
+        """
+
+        ctx.set_materialize_grads(False)
+        ctx.pet_projector = pet_projector
+
+        # convert pytorch input tensor into cupy array
+        cp_x = cp.ascontiguousarray(cp.from_dlpack(x.detach()))
+
+        # a custom function that maps from cupy array to cupy array
+        cp_y = pet_projector.adjoint(cp_x)
+
+        return torch.from_dlpack(cp_y)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        """
+        In the backward pass we receive a Tensor containing the gradient of the loss
+        with respect to the output, and we need to compute the gradient of the loss
+        with respect to the input.
+
+        For details on how to implement the backward pass, see
+        https://pytorch.org/docs/stable/notes/extending.html#how-to-use
+        """
+
+        if grad_output is None:
+            return None, None
+        else:
+            pet_projector = ctx.pet_projector
+
+            # convert torch array to cupy array
+            cp_grad_output = cp.from_dlpack(grad_output.detach())
+
+            # since forward takes two input arguments (x and projector)
+            # we have to return two arguments (the latter is None)
+            return torch.from_dlpack(
+                pet_projector.forward(cp_grad_output)), None
 
 
 if __name__ == '__main__':
@@ -101,14 +154,33 @@ if __name__ == '__main__':
                    dtype=dtype,
                    requires_grad=True)
 
-    # To apply our Function, we use Function.apply method. We alias this as 'P3'.
-    pet_fwd = PETFwdProjectionLayer.apply
+    y = torch.rand(proj.output_shape,
+                   device=device,
+                   dtype=dtype,
+                   requires_grad=True)
 
-    # define a scalar dummy function involving a forward projection layer
-    Q = pet_fwd(x, proj).sum()
+    d = torch.rand(proj.output_shape,
+                   device=device,
+                   dtype=dtype,
+                   requires_grad=False)
+
+    # To apply our Function, we use Function.apply method. We alias this as 'P3'.
+    pet_fwd_layer = PETFwdProjectionLayer.apply
+    pet_adjoint_layer = PETAdjointProjectionLayer.apply
+
+    # define a scalar dummy function involving a forward / back projection layer
+    Q1 = pet_fwd_layer(x, proj).sum()
+    Q2 = pet_adjoint_layer(y, proj).sum()
+
+    # define a layer involving forward and backward projection
+    # this layer would be the gradient of an L2 squared data fidelity term
+    Q3 = pet_adjoint_layer(pet_fwd_layer(x, proj) - d, proj).sum()
 
     # check the gradients using gradcheck
-    test_result = torch.autograd.gradcheck(pet_fwd, (x, proj), eps=1e-6)
+    grad_test_fwd = torch.autograd.gradcheck(pet_fwd_layer, (x, proj),
+                                             eps=1e-6)
+    grad_test_adjoint = torch.autograd.gradcheck(pet_adjoint_layer, (y, proj),
+                                                 eps=1e-6)
 
-    # call the backpropagation step
-    Q.backward()
+    # call the backpropagation step on the nested layer
+    Q3.backward()
