@@ -110,12 +110,15 @@ class PETProjector(operators.LinearListmodeSubsetOperator):
         return self._multiplicative_corrections
 
     @multiplicative_corrections.setter
-    def multiplicative_corrections(self,
-                                   value: npt.NDArray | cpt.NDArray) -> None:
-        if self.tof and (value.ndim == 1):
-            self._multiplicative_corrections = np.expand_dims(value, -1)
-        else:
+    def multiplicative_corrections(
+            self, value: npt.NDArray | cpt.NDArray | None) -> None:
+        if value is None:
             self._multiplicative_corrections = value
+        else:
+            if self.tof and (value.ndim == 1):
+                self._multiplicative_corrections = np.expand_dims(value, -1)
+            else:
+                self._multiplicative_corrections = value
 
     @property
     def multiplicative_correction_list(
