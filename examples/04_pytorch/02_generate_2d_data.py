@@ -60,12 +60,14 @@ voxel_size = (2., 2., 2.)
 # 5 -> low counts, 5 -> medium counts, 500 -> high counts
 trues_per_volume = 50.
 
-for sim_number in [0, 1, 2]:
-    for subject_number in [
-            4, 5, 6, 18, 20, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-            52, 53, 54
-    ]:
+#for sim_number in [0, 1, 2]:
+#    for subject_number in [
+#            4, 5, 6, 18, 20, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+#            52, 53, 54
+#    ]:
 
+for sim_number in [0]:
+    for subject_number in [4]:
         #---------------------------------------------------------------------
         #---------------------------------------------------------------------
         #--- setup the emission and attenuation images -----------------------
@@ -205,14 +207,28 @@ for sim_number in [0, 1, 2]:
             ) / 'data' / f'OSEM_2D_{trues_per_volume:.2E}' / f'{subject_number:03}_{sim_number:03}_{start_sl:03}'
             odir.mkdir(parents=True, exist_ok=True)
 
-            # save the true image
-            cp.save(odir / 'image.npy', image)
-            cp.save(odir / f'osem_{seed:03}.npy', x)
-            cp.save(odir / f'data_{seed:03}.npy', data)
-            cp.save(odir / 'image_fwd.npy', image_fwd)
-            cp.save(odir / 'multiplicative_corrections.npy',
-                    projector.multiplicative_corrections)
-            cp.save(odir / 'contamination.npy', contamination)
+            # save the image we need
+            cp.savez_compressed(odir / 'image.npz', image)
+            cp.savez_compressed(odir / f'osem_{seed:03}.npz', x)
+            cp.savez_compressed(odir / f'adjoint_ones.npz',
+                                reconstructor.adjoint_ones)
+
+            # all sinograms we need
+            # to facilitate the handling of subset data, we reshape the data
+            # into subsets
+            cp.savez_compressed(
+                odir / f'data_{seed:03}.npz',
+                subsets.split_subset_data(data, projector.subsetter))
+            cp.savez_compressed(
+                odir / 'image_fwd.npz',
+                subsets.split_subset_data(image_fwd, projector.subsetter))
+            cp.savez_compressed(
+                odir / 'multiplicative_corrections.npz',
+                subsets.split_subset_data(projector.multiplicative_corrections,
+                                          projector.subsetter))
+            cp.savez_compressed(
+                odir / 'contamination.npz',
+                subsets.split_subset_data(contamination, projector.subsetter))
 
             # pickle (dill) the projector, but without multiplicative corrections
             projector.multiplicative_corrections = None

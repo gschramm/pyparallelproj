@@ -5,6 +5,11 @@ import math
 import numpy as np
 import numpy.typing as npt
 
+try:
+    import cupy.typing as cpt
+except:
+    import numpy.typing as cpt
+
 from . import coincidences
 
 
@@ -241,3 +246,82 @@ class SingoramViewSubsetter(Subsetter):
         tmp[self._view_axis] = self._subset_views[subset].shape[0]
 
         return tuple(tmp)
+
+
+def split_subset_data(data: npt.NDArray | cpt.NDArray,
+                      subsetter: Subsetter) -> npt.NDArray | cpt.NDArray:
+    """split a subset data array into a "chunked" array that facilitates access
+       to the subsets
+
+    Parameters
+    ----------
+    data : npt.NDArray | cpt.NDArray
+        an array
+    subsetter : Subsetter
+        defining substes along the first axis of the array
+        the size of all the subsets must be the same
+
+    Returns
+    -------
+    npt.NDArray | cpt.NDArray
+        reshaped "chunked" array
+        if the input array has shape (50,27) and we have 5 subsets,
+        the reshaped array has shape (5,10,27) nad [i,:,:] contains
+        the data of the first subset
+    """
+    subset_ind_len = [
+        subsetter.get_subset_index_len(i) for i in range(subsetter.num_subsets)
+    ]
+
+    if len(set(subset_ind_len)) > 1:
+        raise ValueError("Subsets must have equal length.")
+
+    subset_len = subset_ind_len[0]
+
+    if data.ndim > 1:
+        new_shape = (subsetter.num_subsets, subset_len) + data.shape[1:]
+    else:
+        new_shape = (subsetter.num_subsets, subset_len)
+
+    reshaped_data = 0 * data.reshape(new_shape)
+
+    for i in range(subsetter.num_subsets):
+        subset_inds = subsetter.get_subset_indices(i)
+        reshaped_data[i, ...] = data[subset_inds, ...]
+
+    return reshaped_data
+
+
+def merge_subset_data(chunked_data: npt.NDArray | cpt.NDArray,
+                      subsetter: Subsetter) -> npt.NDArray | cpt.NDArray:
+    """merged data of a chunked data array into a subset array
+
+    Parameters
+    ----------
+    chunked_data : npt.NDArray | cpt.NDArray
+        an array split into chunks
+    subsetter : Subsetter
+        defining substes along the first axis of the array
+        the size of all the subsets must be the same
+
+    Returns
+    -------
+    npt.NDArray | cpt.NDArray
+        reshaped array
+        if the chunked input array has shape (5,10,27) (5 subsets)
+        the reshaped array has shape (50,27)
+    """
+
+    if chunked_data.ndim > 2:
+        new_shape = (chunked_data.shape[0] *
+                     chunked_data.shape[1], ) + chunked_data.shape[2:]
+    else:
+        new_shape = (chunked_data.shape[0] * chunked_data.shape[1], )
+
+    reshaped_data = 0 * chunked_data.reshape(new_shape)
+
+    for i in range(subsetter.num_subsets):
+        subset_inds = subsetter.get_subset_indices(i)
+        reshaped_data[subset_inds] = chunked_data[i, ...]
+
+    return reshaped_data

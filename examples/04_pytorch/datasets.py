@@ -51,8 +51,8 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
 
     def __getitem__(
         self, idx: int
-    ) -> tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
-                     torch.Tensor], torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+               torch.Tensor, torch.Tensor]:
         """load sample of OSEM 2D data set
 
         Parameters
@@ -85,8 +85,7 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
         osem /= norm
         image /= norm
 
-        return (osem, data, multiplicative_corrections, contamination,
-                norm), image
+        return osem, data, multiplicative_corrections, contamination, norm, image
 
 
 if __name__ == '__main__':

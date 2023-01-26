@@ -7,9 +7,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 import pyparallelproj.algorithms as algorithms
+import pyparallelproj.subsets as subsets
 
 seed = 1
-odir = Path('../data/OSEM_2D_5.00E+02/004_000_032/')
+odir = Path('../data/OSEM_2D_5.00E+01/004_000_019/')
 
 #----------------------------------------------------------
 # load the data
@@ -17,15 +18,29 @@ odir = Path('../data/OSEM_2D_5.00E+02/004_000_032/')
 with open(odir / 'parameters.json', 'r') as f:
     parameters = json.load(f)
 
-image = cp.load(odir / 'image.npy')
-osem = cp.load(odir / f'osem_{seed:03}.npy')
-data = cp.load(odir / f'data_{seed:03}.npy')
-image_fwd = cp.load(odir / 'image_fwd.npy')
-multiplicative_corrections = cp.load(odir / 'multiplicative_corrections.npy')
-contamination = cp.load(odir / 'contamination.npy')
-
 with open(odir / 'projector.pkl', 'rb') as f:
     projector = dill.load(f)
+
+# load the images
+image = cp.load(odir / 'image.npz')['arr_0']
+osem = cp.load(odir / f'osem_{seed:03}.npz')['arr_0']
+adjoint_ones = cp.load(odir / 'adjoint_ones.npz')['arr_0']
+
+# load the sinograms
+# they are stored as "chunked subset arrays"
+# a TOF sinogram has the shape (num_subsets, num_lors_per_subsets, num_tofbins)
+data = cp.load(odir / f'data_{seed:03}.npz')['arr_0']
+image_fwd = cp.load(odir / 'image_fwd.npz')['arr_0']
+multiplicative_corrections = cp.load(odir /
+                                     'multiplicative_corrections.npz')['arr_0']
+contamination = cp.load(odir / 'contamination.npz')['arr_0']
+
+# reshape the chunked subset sinogram arrays
+data = subsets.merge_subset_data(data, projector.subsetter)
+image_fwd = subsets.merge_subset_data(image_fwd, projector.subsetter)
+multiplicative_corrections = subsets.merge_subset_data(
+    multiplicative_corrections, projector.subsetter)
+contamination = subsets.merge_subset_data(contamination, projector.subsetter)
 
 #----------------------------------------------------------
 # rerun the recon
