@@ -6,9 +6,10 @@ from pathlib import Path
 class OSEM2DDataSet(torch.utils.data.Dataset):
 
     def __init__(self,
-                 basedir: str = '../data/OSEM_2D_5.00E+01',
+                 basedir: str,
                  seed: int = 1,
-                 normalization_quantile: float = 0.99) -> None:
+                 normalization_quantile: float = 0.99,
+                 verbose: bool = False) -> None:
         """simulated 2D PET data
 
         Parameters
@@ -23,6 +24,7 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
         self._basedir = Path(basedir)
         self._seed = seed
         self._normalization_quantile = normalization_quantile
+        self._verbose = verbose
 
         self._dir_list = sorted(self._basedir.glob('???_???_???'))
 
@@ -37,6 +39,14 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
     @seed.setter
     def seed(self, value) -> None:
         self._seed = value
+
+    @property
+    def verbose(self) -> bool:
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, value) -> None:
+        self._verbose = value
 
     @property
     def dir_list(self) -> list[Path]:
@@ -68,6 +78,9 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
            normalized true image
         """
         odir = self.dir_list[idx]
+
+        if self.verbose:
+            print(odir)
 
         image = torch.from_numpy(
             np.expand_dims(np.load(odir / 'image.npz')['arr_0'], 0))

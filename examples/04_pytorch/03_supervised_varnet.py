@@ -138,7 +138,7 @@ class PETVarNet(torch.nn.Module):
 if __name__ == '__main__':
     dtype = torch.float32
     device = torch.device("cuda:0")
-    training_data_dir: str = '../data/OSEM_2D_5.00E+01'
+    training_data_dir: str = '../data/training/OSEM_2D_5.00E+01'
     batch_size: int = 16
     learning_rate: float = 1e-3
     num_epochs: int = 100
@@ -151,8 +151,8 @@ if __name__ == '__main__':
     #--- setup the data loaders ------------------------------------------------
     #---------------------------------------------------------------------------
 
-    ds = OSEM2DDataSet(basedir=training_data_dir)
-    training_data_loader = torch.utils.data.DataLoader(ds,
+    training_data_set = OSEM2DDataSet(training_data_dir)
+    training_data_loader = torch.utils.data.DataLoader(training_data_set,
                                                        batch_size=batch_size,
                                                        drop_last=True,
                                                        shuffle=True,
@@ -164,7 +164,7 @@ if __name__ == '__main__':
 
     # the projector (without multiplicative corrections) should be the same for
     # all data sets, so we only restore the one from the first data set
-    with open(ds.dir_list[0] / 'projector.pkl', 'rb') as f:
+    with open(training_data_set.dir_list[0] / 'projector.pkl', 'rb') as f:
         projector = dill.load(f)
 
     #---------------------------------------------------------------------------
