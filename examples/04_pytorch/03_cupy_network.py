@@ -2,7 +2,8 @@
    (cupy) projections and 3D convolutions
 """
 
-import collections
+import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import dill
 
@@ -10,20 +11,29 @@ import pyparallelproj.petprojectors as petprojectors
 
 from layers import LinearSubsetForwardLayer, LinearSubsetAdjointLayer
 from datasets import OSEM2DDataSet
+from models import sequential_conv_model
 
 
-class MyModel(torch.nn.Module):
+class PETVarNet(torch.nn.Module):
     """dummy cascaded model that includes layers combining projections and convolutions"""
 
     def __init__(
         self,
         proj: petprojectors.PETJosephProjector,
         neural_net: torch.nn.Module,
+        num_blocks: int = 4,
     ) -> None:
 
-        super(MyModel, self).__init__()
+        super().__init__()
         self._proj = proj
         self._neural_net = neural_net
+
+        self._num_blocks = num_blocks
+        self._subsets_to_use = np.linspace(0,
+                                           self._proj.subsetter.num_subsets,
+                                           self._num_blocks,
+                                           endpoint=False).astype(int)
+
         self._neural_net_weight = torch.nn.Parameter(torch.tensor(1.0))
 
         self._pet_fwd_subset = LinearSubsetForwardLayer.apply
@@ -78,8 +88,7 @@ class MyModel(torch.nn.Module):
             unscaled_update = self._pet_adjoint_subset(
                 multiplicative_corrections[i, subset, ...] *
                 (1 - data[i, subset, ...] / expected_data), self._proj,
-                subset) * (1. / adjoint_ones[i, subset, ...])
-            #subset) * (unscaled_image / adjoint_ones[i, subset, ...])
+                subset) * (unscaled_image / adjoint_ones[i, subset, ...])
 
             output_tensor[i, 0, ...] = unscaled_update / norm[i]
 
@@ -112,24 +121,31 @@ class MyModel(torch.nn.Module):
         torch.Tensor
             batch of image passed through the model
         """
+
         x = osem
-        for subset in range(self._proj.subsetter.num_subsets):
-            x1 = self._data_fidelity_subset_update(x, data,
-                                                   multiplicative_corrections,
-                                                   contamination, adjoint_ones,
-                                                   norm, subset)
-            x2 = self._neural_net(x)
-            x = torch.nn.ReLU()(x - x1 + self._neural_net_weight * x2)
+
+        for subset in self._subsets_to_use:
+            x_data = self._data_fidelity_subset_update(
+                x, data, multiplicative_corrections, contamination,
+                adjoint_ones, norm, subset)
+            x_net = self._neural_net(x)
+            x = torch.nn.ReLU()(osem - x_data +
+                                self._neural_net_weight * x_net)
 
         return x
 
 
 if __name__ == '__main__':
     dtype = torch.float32
-    device = torch.device("cuda:0")  # Uncomment this to run on GPU
+    device = torch.device("cuda:0")
     training_data_dir: str = '../data/OSEM_2D_5.00E+01'
-    batch_size: int = 8
+    batch_size: int = 16
     learning_rate: float = 1e-3
+    num_epochs: int = 100
+    loss_fct = torch.nn.L1Loss()
+    num_blocks: int = 4
+    num_layers: int = 6
+    num_features: int = 10
 
     #---------------------------------------------------------------------------
     #--- setup the data loaders ------------------------------------------------
@@ -138,6 +154,7 @@ if __name__ == '__main__':
     ds = OSEM2DDataSet(basedir=training_data_dir)
     training_data_loader = torch.utils.data.DataLoader(ds,
                                                        batch_size=batch_size,
+                                                       drop_last=True,
                                                        shuffle=True,
                                                        num_workers=5)
 
@@ -151,34 +168,15 @@ if __name__ == '__main__':
         projector = dill.load(f)
 
     #---------------------------------------------------------------------------
-    #--- define a simple conv net ----------------------------------------------
+    #--- define a simple conv net that maps an image onto an image -------------
     #---------------------------------------------------------------------------
-    kernel_size = (3, 3, 1)
-    conv1 = torch.nn.Conv3d(1,
-                            10,
-                            kernel_size,
-                            padding='same',
-                            device=device,
-                            dtype=torch.float32)
-    conv2 = torch.nn.Conv3d(10,
-                            10,
-                            kernel_size,
-                            padding='same',
-                            device=device,
-                            dtype=torch.float32)
-    conv3 = torch.nn.Conv3d(10,
-                            1,
-                            kernel_size,
-                            padding='same',
-                            device=device,
-                            dtype=torch.float32)
+    conv_net = sequential_conv_model(device=torch.device("cuda:0"),
+                                     kernel_size=(3, 3, 1),
+                                     num_layers=num_layers,
+                                     num_features=num_features,
+                                     dtype=torch.float32)
 
-    conv_net = torch.nn.Sequential(
-        collections.OrderedDict([('conv1', conv1), ('conv2', conv2),
-                                 ('conv3', conv3),
-                                 ('relu3', torch.nn.ReLU())]))
-
-    model = MyModel(projector, conv_net)
+    model = PETVarNet(projector, conv_net, num_blocks=num_blocks)
 
     # setup the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -187,7 +185,9 @@ if __name__ == '__main__':
     #--- training loop ---------------------------------------------------------
     #---------------------------------------------------------------------------
 
-    for epoch in range(5):
+    loss_list = []
+
+    for epoch in range(num_epochs):
         for i, (osem, data, multiplicative_corrections, contamination,
                 adjoint_ones, norm, image) in enumerate(training_data_loader):
 
@@ -210,7 +210,9 @@ if __name__ == '__main__':
             x_fwd = model.forward(osem, data, multiplicative_corrections,
                                   contamination, adjoint_ones, norm)
 
-            loss = ((x_fwd - image)**2).mean()
+            loss = loss_fct(x_fwd, image)
+            loss_list.append(float(loss.cpu().detach().numpy()))
+
             print(
                 f'{epoch:03} / {(i+1):03} / {(ds.__len__() // batch_size):03} loss: {loss:.2E}'
             )
@@ -218,3 +220,39 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        # save some visualizations at the end of every epoch
+        y = conv_net(osem)
+        for ib in range(batch_size):
+            fig, ax = plt.subplots(2, 2, figsize=(9, 9))
+            ax[0, 0].imshow(osem[ib, 0, ...].cpu().detach().numpy().squeeze(),
+                            vmin=0,
+                            vmax=1.2)
+            ax[0, 1].imshow(x_fwd[ib, 0, ...].cpu().detach().numpy().squeeze(),
+                            vmin=0,
+                            vmax=1.2)
+            ax[1, 0].imshow(image[ib, 0, ...].cpu().detach().numpy().squeeze(),
+                            vmin=0,
+                            vmax=1.2)
+            ax[1, 1].imshow(y[ib, 0, ...].cpu().detach().numpy().squeeze())
+
+            for axx in ax.ravel():
+                axx.set_axis_off()
+            fig.tight_layout()
+            fig.savefig(f'sample_{ib:02}.png')
+            plt.close()
+
+            if len(loss_list) > 505:
+                loss_array = np.array(loss_list)
+                fig2, ax2 = plt.subplots(2, 2, figsize=(8, 8))
+                ax2[0, 0].loglog(
+                    np.convolve(loss_array, np.ones(5) / 5, mode='valid'))
+                ax2[0, 1].loglog(
+                    np.convolve(loss_array, np.ones(25) / 25, mode='valid'))
+                ax2[1, 0].loglog(
+                    np.convolve(loss_array, np.ones(100) / 100, mode='valid'))
+                ax2[1, 1].loglog(
+                    np.convolve(loss_array, np.ones(500) / 500, mode='valid'))
+                fig2.tight_layout()
+                fig2.savefig(f'loss.png')
+                plt.close()
