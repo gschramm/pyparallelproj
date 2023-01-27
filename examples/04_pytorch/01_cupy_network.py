@@ -1,229 +1,220 @@
 """minimal example that shows how to setup a cascaded model with layers combining
    (cupy) projections and 3D convolutions
-
-   in this mini demo, we use a dummy cupy projector for demonstration purposes
 """
 
+import collections
 import torch
-import math
-import cupy as cp
-import cupy.typing as cpt
+import dill
 
+import pyparallelproj.petprojectors as petprojectors
 
-class PETProjector:
-    """dummy PET projector that maps a 3D array into a 4D array using
-       a random dense matrix
-
-       implemented to test pytorch autograd functions
-    """
-
-    def __init__(
-        self, input_shape=(5, 6, 7), output_shape=(3, 5, 4, 3)) -> None:
-        self._input_shape = input_shape
-        self._output_shape = output_shape
-
-        self._A = cp.random.rand(math.prod(self._output_shape),
-                                 math.prod(self._input_shape)).astype(
-                                     cp.float32) / 100
-
-    @property
-    def input_shape(self) -> tuple[int, int, int]:
-        return self._input_shape
-
-    @property
-    def output_shape(self) -> tuple[int, int, int, int]:
-        return self._output_shape
-
-    def forward(self, x: cpt.NDArray) -> cpt.NDArray:
-        return (self._A @ x.ravel()).reshape(self._output_shape)
-
-    def adjoint(self, y: cpt.NDArray) -> cpt.NDArray:
-        return (self._A.T @ y.ravel()).reshape(self._input_shape)
-
-
-class PETFwdProjectionLayer(torch.autograd.Function):
-    """PET forward projection layer mapping a 3D image to a 4D sinogram
-
-    We can implement our own custom autograd Functions by subclassing
-    torch.autograd.Function and implementing the forward and backward passes
-    which operate on Tensors.
-    """
-
-    @staticmethod
-    def forward(ctx, x, pet_projector: PETProjector):
-        """
-        In the forward pass we receive a Tensor containing the input and return
-        a Tensor containing the output. ctx is a context object that can be used
-        to stash information for backward computation.
-        """
-
-        ctx.set_materialize_grads(False)
-        ctx.pet_projector = pet_projector
-
-        # convert pytorch input tensor into cupy array
-        cp_x = cp.ascontiguousarray(cp.from_dlpack(x.detach()))
-
-        # a custom function that maps from cupy array to cupy array
-        cp_y = pet_projector.forward(cp_x)
-
-        return torch.from_dlpack(cp_y)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        """
-        In the backward pass we receive a Tensor containing the gradient of the loss
-        with respect to the output, and we need to compute the gradient of the loss
-        with respect to the input.
-
-        For details on how to implement the backward pass, see
-        https://pytorch.org/docs/stable/notes/extending.html#how-to-use
-        """
-
-        if grad_output is None:
-            return None, None
-        else:
-            pet_projector = ctx.pet_projector
-
-            # convert torch array to cupy array
-            cp_grad_output = cp.from_dlpack(grad_output.detach())
-
-            # since forward takes two input arguments (x and projector)
-            # we have to return two arguments (the latter is None)
-            return torch.from_dlpack(
-                pet_projector.adjoint(cp_grad_output)), None
-
-
-class PETAdjointProjectionLayer(torch.autograd.Function):
-    """ adjoint of PET forward projection layer mapping a 4D sinogram to a 3D image
-    
-    We can implement our own custom autograd Functions by subclassing
-    torch.autograd.Function and implementing the forward and backward passes
-    which operate on Tensors.
-    """
-
-    @staticmethod
-    def forward(ctx, x, pet_projector: PETProjector):
-        """
-        In the forward pass we receive a Tensor containing the input and return
-        a Tensor containing the output. ctx is a context object that can be used
-        to stash information for backward computation.
-        """
-
-        ctx.set_materialize_grads(False)
-        ctx.pet_projector = pet_projector
-
-        # convert pytorch input tensor into cupy array
-        cp_x = cp.ascontiguousarray(cp.from_dlpack(x.detach()))
-
-        # a custom function that maps from cupy array to cupy array
-        cp_y = pet_projector.adjoint(cp_x)
-
-        return torch.from_dlpack(cp_y)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        """
-        In the backward pass we receive a Tensor containing the gradient of the loss
-        with respect to the output, and we need to compute the gradient of the loss
-        with respect to the input.
-
-        For details on how to implement the backward pass, see
-        https://pytorch.org/docs/stable/notes/extending.html#how-to-use
-        """
-
-        if grad_output is None:
-            return None, None
-        else:
-            pet_projector = ctx.pet_projector
-
-            # convert torch array to cupy array
-            cp_grad_output = cp.from_dlpack(grad_output.detach())
-
-            # since forward takes two input arguments (x and projector)
-            # we have to return two arguments (the latter is None)
-            return torch.from_dlpack(
-                pet_projector.forward(cp_grad_output)), None
+from layers import LinearSubsetForwardLayer, LinearSubsetAdjointLayer
+from datasets import OSEM2DDataSet
 
 
 class MyModel(torch.nn.Module):
     """dummy cascaded model that includes layers combining projections and convolutions"""
 
-    def __init__(self, proj: PETProjector, data: torch.Tensor,
-                 contaminations: torch.Tensor,
-                 device: torch.DeviceObjType) -> None:
+    def __init__(
+        self,
+        proj: petprojectors.PETJosephProjector,
+        neural_net: torch.nn.Module,
+    ) -> None:
+
         super(MyModel, self).__init__()
         self._proj = proj
-        self._data = data
-        self._contaminations = contaminations
-        self._device = device
+        self._neural_net = neural_net
+        self._neural_net_weight = torch.nn.Parameter(torch.tensor(1.0))
 
-        self._pet_fwd = PETFwdProjectionLayer.apply
-        self._pet_adjoint = PETAdjointProjectionLayer.apply
+        self._pet_fwd_subset = LinearSubsetForwardLayer.apply
+        self._pet_adjoint_subset = LinearSubsetAdjointLayer.apply
 
-        self._conv = torch.nn.Conv3d(1,
-                                     1, (3, 3, 3),
-                                     padding='same',
-                                     device=self._device,
-                                     dtype=torch.float32)
+    def _data_fidelity_subset_update(self, osem: torch.Tensor,
+                                     data: torch.Tensor,
+                                     multiplicative_corrections: torch.Tensor,
+                                     contamination: torch.Tensor,
+                                     adjoint_ones: torch.Tensor,
+                                     norm: torch.Tensor,
+                                     subset: int) -> torch.Tensor:
+        """subset data fidelity update for batch of images
 
-    def _proj_conv(self, x: torch.Tensor) -> torch.Tensor:
-        """layer combining a Poisson logL update with a 3DConv
-           input is a 5D torch tensor with dimension (batch_size, 1, n0, n1, n2)
-           ouput tensor has same shape as the input
+        Parameters
+        ----------
+        osem : torch.Tensor
+            batch of normalized OSEM images, shape (batch_size,0,n0,n1,1)
+        data : torch.Tensor
+            batch of (subset chunked) emission sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        multiplicative_corrections : torch.Tensor
+            batch of (subset chunked) mult. correction sinograms, shape (batch_size, num_subsets, num_subset_lors, 1)
+        contamination : torch.Tensor
+            batch of (subset chunked) contamination sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        adjoint_ones : torch.Tensor
+            batch of adjoint ones (subset sensitivity image), shape (batch_size, num_subsets, n0, n1, 1)
+        norm : torch.Tensor
+            batch of OSEM image normalization factors, shape (batch_size)
+            "unnormalized image" = norm[i_batch] * osem[i_batch,...]
+
+        Returns
+        -------
+        torch.Tensor
+            batch of image passed through the model
         """
 
-        num_batch = x.shape[0]
+        num_batch = osem.shape[0]
 
-        x_fwd_pet = torch.zeros_like(x)
+        output_tensor = torch.zeros_like(osem)
 
         for i in range(num_batch):
-            x_fwd_pet[i, 0, ...] = self._pet_adjoint(
-                1 - self._data[i, 0, ...] /
-                (self._pet_fwd(x[i, 0, ...], self._proj) +
-                 self._contaminations[i, 0, ...]), self._proj)
+            unscaled_image = norm[i] * osem[i, 0, ...]
 
-        x_fwd_conv = self._conv(x)
+            # calculate the PET subset  forward step
+            expected_data = multiplicative_corrections[
+                i, subset, ...] * self._pet_fwd_subset(
+                    unscaled_image, self._proj, subset) + contamination[i,
+                                                                        subset,
+                                                                        ...]
 
-        return x_fwd_pet + x_fwd_conv
+            # Poisson logL update
+            unscaled_update = self._pet_adjoint_subset(
+                multiplicative_corrections[i, subset, ...] *
+                (1 - data[i, subset, ...] / expected_data), self._proj,
+                subset) * (1. / adjoint_ones[i, subset, ...])
+            #subset) * (unscaled_image / adjoint_ones[i, subset, ...])
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """cascaded proj+conv layers
-           input is a 5D torch tensor with dimension (batch_size, 1, n0, n1, n2)
-           ouput tensor has same shape as the input
+            output_tensor[i, 0, ...] = unscaled_update / norm[i]
+
+        return output_tensor
+
+    def forward(self, osem: torch.Tensor, data: torch.Tensor,
+                multiplicative_corrections: torch.Tensor,
+                contamination: torch.Tensor, adjoint_ones: torch.Tensor,
+                norm: torch.Tensor) -> torch.Tensor:
+        """forward pass of model
+
+        Parameters
+        ----------
+        osem : torch.Tensor
+            batch of normalized OSEM images, shape (batch_size,0,n0,n1,1)
+        data : torch.Tensor
+            batch of (subset chunked) emission sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        multiplicative_corrections : torch.Tensor
+            batch of (subset chunked) mult. correction sinograms, shape (batch_size, num_subsets, num_subset_lors, 1)
+        contamination : torch.Tensor
+            batch of (subset chunked) contamination sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        adjoint_ones : torch.Tensor
+            batch of adjoint ones (subset sensitivity image), shape (batch_size, num_subsets, n0, n1, 1)
+        norm : torch.Tensor
+            batch of OSEM image normalization factors, shape (batch_size)
+            "unnormalized image" = norm[i_batch] * osem[i_batch,...]
+
+        Returns
+        -------
+        torch.Tensor
+            batch of image passed through the model
         """
-        x1 = self._proj_conv(x)
-        x2 = self._proj_conv(x1)
-        x3 = self._proj_conv(x2)
+        x = osem
+        for subset in range(self._proj.subsetter.num_subsets):
+            x1 = self._data_fidelity_subset_update(x, data,
+                                                   multiplicative_corrections,
+                                                   contamination, adjoint_ones,
+                                                   norm, subset)
+            x2 = self._neural_net(x)
+            x = torch.nn.ReLU()(x - x1 + self._neural_net_weight * x2)
 
-        return x3
+        return x
 
 
 if __name__ == '__main__':
     dtype = torch.float32
     device = torch.device("cuda:0")  # Uncomment this to run on GPU
+    training_data_dir: str = '../data/OSEM_2D_5.00E+01'
+    batch_size: int = 8
+    learning_rate: float = 1e-3
 
-    proj = PETProjector()
+    #---------------------------------------------------------------------------
+    #--- setup the data loaders ------------------------------------------------
+    #---------------------------------------------------------------------------
 
-    batch_size = 3
+    ds = OSEM2DDataSet(basedir=training_data_dir)
+    training_data_loader = torch.utils.data.DataLoader(ds,
+                                                       batch_size=batch_size,
+                                                       shuffle=True,
+                                                       num_workers=5)
 
-    x = torch.rand((batch_size, 1) + proj.input_shape,
-                   device=device,
-                   dtype=dtype,
-                   requires_grad=False)
+    #---------------------------------------------------------------------------
+    #--- load the projector ----------------------------------------------------
+    #---------------------------------------------------------------------------
 
-    d = torch.rand((batch_size, 1) + proj.output_shape,
-                   device=device,
-                   dtype=dtype,
-                   requires_grad=False)
+    # the projector (without multiplicative corrections) should be the same for
+    # all data sets, so we only restore the one from the first data set
+    with open(ds.dir_list[0] / 'projector.pkl', 'rb') as f:
+        projector = dill.load(f)
 
-    c = torch.rand((batch_size, 1) + proj.output_shape,
-                   device=device,
-                   dtype=dtype,
-                   requires_grad=False)
+    #---------------------------------------------------------------------------
+    #--- define a simple conv net ----------------------------------------------
+    #---------------------------------------------------------------------------
+    kernel_size = (3, 3, 1)
+    conv1 = torch.nn.Conv3d(1,
+                            10,
+                            kernel_size,
+                            padding='same',
+                            device=device,
+                            dtype=torch.float32)
+    conv2 = torch.nn.Conv3d(10,
+                            10,
+                            kernel_size,
+                            padding='same',
+                            device=device,
+                            dtype=torch.float32)
+    conv3 = torch.nn.Conv3d(10,
+                            1,
+                            kernel_size,
+                            padding='same',
+                            device=device,
+                            dtype=torch.float32)
 
-    model = MyModel(proj, d, c, device)
+    conv_net = torch.nn.Sequential(
+        collections.OrderedDict([('conv1', conv1), ('conv2', conv2),
+                                 ('conv3', conv3),
+                                 ('relu3', torch.nn.ReLU())]))
 
-    x_fwd = model.forward(x)
+    model = MyModel(projector, conv_net)
 
-    y = x_fwd.sum()
-    y.backward()
+    # setup the optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    #---------------------------------------------------------------------------
+    #--- training loop ---------------------------------------------------------
+    #---------------------------------------------------------------------------
+
+    for epoch in range(5):
+        for i, (osem, data, multiplicative_corrections, contamination,
+                adjoint_ones, norm, image) in enumerate(training_data_loader):
+
+            # send mini-batch of data to cuda device
+            # normalized OSEM recon - shape (batch_size, 1, n0, n1, 1)
+            osem = osem.to(device)
+            # emission sinograms - shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+            data = data.to(device)
+            # mult. correction sinograms - shape (batch_size, num_subsets, num_subset_lors, 1)
+            multiplicative_corrections = multiplicative_corrections.to(device)
+            # contamination sinograms - shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+            contamination = contamination.to(device)
+            # adjoint ones (sens. images) - shape (batch_size, num_subsets, n0, n1, 1)
+            adjoint_ones = adjoint_ones.to(device)
+            # normalization factor used to normalize OSEM image - shape (batch_size,)
+            norm = norm.to(device)
+            # normalized ground truth images (batch_size, 1, n0, n1, 1)
+            image = image.to(device)
+
+            x_fwd = model.forward(osem, data, multiplicative_corrections,
+                                  contamination, adjoint_ones, norm)
+
+            loss = ((x_fwd - image)**2).mean()
+            print(
+                f'{epoch:03} / {(i+1):03} / {(ds.__len__() // batch_size):03} loss: {loss:.2E}'
+            )
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
