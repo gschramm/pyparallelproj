@@ -1,9 +1,9 @@
 import torch
 import cupy as cp
-import pyparallelproj.petprojectors as petprojectors
+import pyparallelproj.operators as operators
 
 
-class PETFwdProjectionLayer(torch.autograd.Function):
+class LinearSubsetForwardLayer(torch.autograd.Function):
     """PET forward projection layer mapping a 3D image to a 4D sinogram
 
     We can implement our own custom autograd Functions by subclassing
@@ -12,7 +12,8 @@ class PETFwdProjectionLayer(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, x, pet_projector: petprojectors.PETProjector):
+    def forward(ctx, x, subset_operator: operators.LinearSubsetOperator,
+                subset: int):
         """
         In the forward pass we receive a Tensor containing the input and return
         a Tensor containing the output. ctx is a context object that can be used
@@ -20,18 +21,20 @@ class PETFwdProjectionLayer(torch.autograd.Function):
         """
 
         ctx.set_materialize_grads(False)
-        ctx.pet_projector = pet_projector
+        ctx.subset_operator = subset_operator
+        ctx.subset = subset
 
         # convert pytorch input tensor into cupy array
         cp_x = cp.ascontiguousarray(cp.from_dlpack(x.detach()))
 
         # a custom function that maps from cupy array to cupy array
-        cp_y = pet_projector.forward(cp_x)
+        cp_y = subset_operator.forward_subset(
+            cp_x, subset_operator.subsetter.get_subset_indices(subset))
 
         return torch.from_dlpack(cp_y)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, grad_output: torch.Tensor):
         """
         In the backward pass we receive a Tensor containing the gradient of the loss
         with respect to the output, and we need to compute the gradient of the loss
@@ -42,20 +45,24 @@ class PETFwdProjectionLayer(torch.autograd.Function):
         """
 
         if grad_output is None:
-            return None, None
+            return None, None, None
         else:
-            pet_projector = ctx.pet_projector
+            subset_operator = ctx.subset_operator
+            subset = ctx.subset
 
             # convert torch array to cupy array
             cp_grad_output = cp.from_dlpack(grad_output.detach())
 
-            # since forward takes two input arguments (x and projector)
-            # we have to return two arguments (the latter is None)
+            # since forward takes three input arguments (x, projector, subset)
+            # we have to return three arguments (the latter is None)
             return torch.from_dlpack(
-                pet_projector.adjoint(cp_grad_output)), None
+                subset_operator.adjoint_subset(
+                    cp_grad_output,
+                    subset_operator.subsetter.get_subset_indices(
+                        subset))), None, None
 
 
-class PETAdjointProjectionLayer(torch.autograd.Function):
+class LinearSubsetAdjointLayer(torch.autograd.Function):
     """ adjoint of PET forward projection layer mapping a 4D sinogram to a 3D image
     
     We can implement our own custom autograd Functions by subclassing
@@ -64,7 +71,8 @@ class PETAdjointProjectionLayer(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, x, pet_projector: petprojectors.PETProjector):
+    def forward(ctx, x, subset_operator: operators.LinearSubsetOperator,
+                subset: int):
         """
         In the forward pass we receive a Tensor containing the input and return
         a Tensor containing the output. ctx is a context object that can be used
@@ -72,13 +80,15 @@ class PETAdjointProjectionLayer(torch.autograd.Function):
         """
 
         ctx.set_materialize_grads(False)
-        ctx.pet_projector = pet_projector
+        ctx.subset_operator = subset_operator
+        ctx.subset = subset
 
         # convert pytorch input tensor into cupy array
         cp_x = cp.ascontiguousarray(cp.from_dlpack(x.detach()))
 
         # a custom function that maps from cupy array to cupy array
-        cp_y = pet_projector.adjoint(cp_x)
+        cp_y = subset_operator.adjoint_subset(
+            cp_x, subset_operator.subsetter.get_subset_indices(subset))
 
         return torch.from_dlpack(cp_y)
 
@@ -94,14 +104,18 @@ class PETAdjointProjectionLayer(torch.autograd.Function):
         """
 
         if grad_output is None:
-            return None, None
+            return None, None, None
         else:
-            pet_projector = ctx.pet_projector
+            subset_operator = ctx.subset_operator
+            subset = ctx.subset
 
             # convert torch array to cupy array
             cp_grad_output = cp.from_dlpack(grad_output.detach())
 
-            # since forward takes two input arguments (x and projector)
-            # we have to return two arguments (the latter is None)
+            # since forward takes three input arguments (x, projector, subset)
+            # we have to return three arguments (the latter is None)
             return torch.from_dlpack(
-                pet_projector.forward(cp_grad_output)), None
+                subset_operator.forward_subset(
+                    cp_grad_output,
+                    subset_operator.subsetter.get_subset_indices(
+                        subset))), None, None

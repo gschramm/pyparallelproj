@@ -69,15 +69,20 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
         """
         odir = self.dir_list[idx]
 
-        image = torch.from_numpy(np.expand_dims(np.load(odir / 'image.npy'),
-                                                0))
+        image = torch.from_numpy(
+            np.expand_dims(np.load(odir / 'image.npz')['arr_0'], 0))
         osem = torch.from_numpy(
-            np.expand_dims(np.load(odir / f'osem_{self.seed:03}.npy'), 0))
+            np.expand_dims(
+                np.load(odir / f'osem_{self.seed:03}.npz')['arr_0'], 0))
+        adjoint_ones = torch.from_numpy(
+            np.load(odir / 'adjoint_ones.npz')['arr_0'])
         data = torch.from_numpy(
-            np.load(odir / f'data_{self.seed:03}.npy').astype(np.int16))
+            np.load(odir / f'data_{self.seed:03}.npz')['arr_0'].astype(
+                np.int16))
         multiplicative_corrections = torch.from_numpy(
-            np.load(odir / 'multiplicative_corrections.npy'))
-        contamination = torch.from_numpy(np.load(odir / 'contamination.npy'))
+            np.load(odir / 'multiplicative_corrections.npz')['arr_0'])
+        contamination = torch.from_numpy(
+            np.load(odir / 'contamination.npz')['arr_0'])
 
         # normalize the OSEM and true image
         norm = torch.quantile(osem, self.normalization_quantile)
@@ -85,7 +90,7 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
         osem /= norm
         image /= norm
 
-        return osem, data, multiplicative_corrections, contamination, norm, image
+        return osem, data, multiplicative_corrections, contamination, adjoint_ones, norm, image
 
 
 if __name__ == '__main__':
@@ -93,4 +98,4 @@ if __name__ == '__main__':
     ds = OSEM2DDataSet()
     data_loader = torch.utils.data.DataLoader(ds, batch_size=10, shuffle=True)
 
-    a, b = next(iter(data_loader))
+    a = next(iter(data_loader))
