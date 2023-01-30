@@ -130,8 +130,7 @@ class PETVarNet(torch.nn.Module):
                 x, data, multiplicative_corrections, contamination,
                 adjoint_ones, norm, subset)
             x_net = self._neural_net(x)
-            x = torch.nn.ReLU()(osem - x_data +
-                                self._neural_net_weight * x_net)
+            x = torch.nn.ReLU()(x - x_data + self._neural_net_weight * x_net)
 
         return x
 
