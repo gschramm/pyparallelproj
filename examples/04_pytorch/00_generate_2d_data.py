@@ -9,6 +9,7 @@
 #-----------------------------------------------------------------------
 #-----------------------------------------------------------------------
 
+import argparse
 import json
 from pathlib import Path
 
@@ -32,21 +33,30 @@ import cupyx.scipy.ndimage as ndi
 #---------------------------------------------------------------------
 #---------------------------------------------------------------------
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--seed', type=int, default=1)
+parser.add_argument('--num_iterations', type=int, default=4)
+parser.add_argument('--num_subsets', type=int, default=34)
+parser.add_argument('--fwhm_mm_recon', type=float, default=4.5)
+parser.add_argument('--fwhm_mm_data', type=float, default=4.5)
+parser.add_argument('--trues_per_volume', type=float, default=50.)
+args = parser.parse_args()
+
 # seed for the random generator
-seed = 1
+seed: int = args.seed
 cp.random.seed(seed)
 
 #-------------------
 # reconstruction parameters
-num_iterations = 4
-num_subsets = 34
+num_iterations: int = args.num_iterations
+num_subsets: int = args.num_subsets
+fwhm_mm_recon: float = args.fwhm_mm_recon
 
 #-------------------
 # scanner parameters
+fwhm_mm_data: float = args.fwhm_mm_data
 num_rings = 1
 symmetry_axis = 0
-fwhm_mm_data = 4.5
-fwhm_mm_recon = 4.5
 
 #-------------------
 # sinogram (data order) parameters
@@ -58,7 +68,7 @@ voxel_size = (2., 2., 2.)
 
 # number of true emitted coincidences per volume (mm^3)
 # 5 -> low counts, 5 -> medium counts, 500 -> high counts
-trues_per_volume = 50.
+trues_per_volume = args.trues_per_volume
 
 for sim_number in [0, 1, 2]:
     for subject_number in [
