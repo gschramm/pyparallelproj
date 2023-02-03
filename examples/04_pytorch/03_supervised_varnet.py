@@ -4,6 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
 import torch
 import dill
 
@@ -227,21 +228,57 @@ def validation_loop(dataloader, model, loss_fn, save_dir):
 def show_validation_batch(input, output, gt, mdl, save_dir):
 
     conv_output = mdl._neural_net(input).cpu().detach().numpy().squeeze()
+    conv_output2 = mdl._neural_net(output).cpu().detach().numpy().squeeze()
 
     for ib in range(input.shape[0]):
-        fig, ax = plt.subplots(2, 2, figsize=(9, 9))
-        ax[0, 0].imshow(input[ib, 0, ...].cpu().detach().numpy().squeeze(),
+        fig, ax = plt.subplots(3, 6, figsize=(18, 9))
+        ground_truth = gt[ib, 0, ...].cpu().detach().numpy().squeeze()
+        ax[0, 0].imshow(ground_truth, vmin=0, vmax=1.2)
+        ax[0, 1].imshow(input[ib, 0, ...].cpu().detach().numpy().squeeze(),
                         vmin=0,
                         vmax=1.2)
-        ax[0, 1].imshow(output[ib, 0, ...].cpu().detach().numpy().squeeze(),
+        ax[0, 2].imshow(gaussian_filter(
+            input[ib, 0, ...].cpu().detach().numpy().squeeze(), 1.),
                         vmin=0,
                         vmax=1.2)
-        ax[1, 0].imshow(gt[ib, 0, ...].cpu().detach().numpy().squeeze(),
+        ax[0, 3].imshow(gaussian_filter(
+            input[ib, 0, ...].cpu().detach().numpy().squeeze(), 1.7),
+                        vmin=0,
+                        vmax=1.2)
+        ax[0, 4].imshow(output[ib, 0, ...].cpu().detach().numpy().squeeze(),
                         vmin=0,
                         vmax=1.2)
 
-        vmax = np.abs(conv_output[ib, ...]).max()
-        ax[1, 1].imshow(conv_output[ib, ...],
+        dmax = 0.3
+        ax[1, 1].imshow(input[ib, 0, ...].cpu().detach().numpy().squeeze() -
+                        ground_truth,
+                        vmin=-dmax,
+                        vmax=dmax,
+                        cmap=plt.cm.seismic)
+        ax[1, 2].imshow(gaussian_filter(
+            input[ib, 0, ...].cpu().detach().numpy().squeeze(), 1.) -
+                        ground_truth,
+                        vmin=-dmax,
+                        vmax=dmax,
+                        cmap=plt.cm.seismic)
+        ax[1, 3].imshow(gaussian_filter(
+            input[ib, 0, ...].cpu().detach().numpy().squeeze(), 1.7) -
+                        ground_truth,
+                        vmin=-dmax,
+                        vmax=dmax,
+                        cmap=plt.cm.seismic)
+        ax[1, 4].imshow(output[ib, 0, ...].cpu().detach().numpy().squeeze() -
+                        ground_truth,
+                        vmin=-dmax,
+                        vmax=dmax,
+                        cmap=plt.cm.seismic)
+
+        vmax = 0.5 * np.abs(conv_output[ib, ...]).max()
+        ax[0, 5].imshow(conv_output[ib, ...],
+                        vmin=-vmax,
+                        vmax=vmax,
+                        cmap=plt.cm.seismic)
+        ax[1, 5].imshow(conv_output2[ib, ...],
                         vmin=-vmax,
                         vmax=vmax,
                         cmap=plt.cm.seismic)
