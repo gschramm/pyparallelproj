@@ -141,6 +141,7 @@ class PETVarNet(torch.nn.Module):
 def training_loop(dataloader, model, loss_fn, optimizer):
 
     loss_list = []
+    model.train()
 
     for i, (osem, data, multiplicative_corrections, contamination,
             adjoint_ones, norm, image) in enumerate(dataloader):
@@ -187,6 +188,7 @@ def validation_loop(dataloader, model, loss_fn, save_dir):
 
     num_batches = len(dataloader)
     val_loss = 0
+    model.eval()
 
     with torch.no_grad():
         for i, (osem, data, multiplicative_corrections, contamination,
@@ -302,7 +304,20 @@ if __name__ == '__main__':
     parser.add_argument('--num_blocks', type=int, default=4)
     parser.add_argument('--num_layers', type=int, default=6)
     parser.add_argument('--num_features', type=int, default=10)
+    parser.add_argument('--ckpt', type=str, default=None)
     args = parser.parse_args()
+
+    if args.ckpt is None:
+        checkpoint = None
+    else:
+        # in case we load a checkpoint, we have to make sure
+        # that num_layers, num_features, num_block are consistent
+        checkpoint = torch.load(args.ckpt)
+        with open(Path(args.ckpt).parent / 'config.json', 'r') as f:
+            config = json.load(f)
+        args.num_blocks = config['num_blocks']
+        args.num_layers = config['num_layers']
+        args.num_features = config['num_features']
 
     num_epochs: int = args.num_epochs
     batch_size: int = args.batch_size
@@ -378,6 +393,15 @@ if __name__ == '__main__':
     # setup the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+    if checkpoint is not None:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        optimizer.param_groups[0]['lr'] = learning_rate
+        start_epoch = checkpoint['epoch']
+        model.train()
+    else:
+        start_epoch = 0
+
     #---------------------------------------------------------------------------
     #--- training loop ---------------------------------------------------------
     #---------------------------------------------------------------------------
@@ -385,7 +409,7 @@ if __name__ == '__main__':
     training_loss = []
     validation_loss = np.zeros(num_epochs)
 
-    for epoch in range(num_epochs):
+    for epoch in np.arange(num_epochs):
         print(f'epoch {(epoch+1):04} / {num_epochs:04}')
         training_loss += training_loop(training_data_loader, model, loss_fct,
                                        optimizer)
@@ -395,7 +419,7 @@ if __name__ == '__main__':
         # save the last checkpoint
         torch.save(
             {
-                'epoch': epoch,
+                'epoch': epoch + start_epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': training_loss[-1],
@@ -406,7 +430,7 @@ if __name__ == '__main__':
                 validation_loss > 0].min():
             torch.save(
                 {
-                    'epoch': epoch,
+                    'epoch': epoch + start_epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': training_loss[-1],
