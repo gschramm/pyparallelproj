@@ -28,6 +28,8 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
 
         self._dir_list = sorted(self._basedir.glob('???_???_???'))
 
+        self._target_image_name = 'image.npz'
+
     @property
     def basedir(self) -> Path:
         return self._basedir
@@ -56,6 +58,22 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
     def normalization_quantile(self) -> float:
         return self._normalization_quantile
 
+    @property
+    def input_image_name(self) -> str:
+        return f'osem_{self.seed:03}.npz'
+
+    @property
+    def data_name(self) -> str:
+        return f'data_{self.seed:03}.npz'
+
+    @property
+    def target_image_name(self) -> str:
+        return self._target_image_name
+
+    @target_image_name.setter
+    def target_image_name(self, value: str) -> None:
+        self._target_image_name = value
+
     def __len__(self) -> int:
         return len(self.dir_list)
 
@@ -83,15 +101,13 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
             print(odir)
 
         image = torch.from_numpy(
-            np.expand_dims(np.load(odir / 'image.npz')['arr_0'], 0))
+            np.expand_dims(np.load(odir / self.target_image_name)['arr_0'], 0))
         osem = torch.from_numpy(
-            np.expand_dims(
-                np.load(odir / f'osem_{self.seed:03}.npz')['arr_0'], 0))
+            np.expand_dims(np.load(odir / self.input_image_name)['arr_0'], 0))
         adjoint_ones = torch.from_numpy(
             np.load(odir / 'adjoint_ones.npz')['arr_0'])
         data = torch.from_numpy(
-            np.load(odir / f'data_{self.seed:03}.npz')['arr_0'].astype(
-                np.int16))
+            np.load(odir / self.data_name)['arr_0'].astype(np.int16))
         multiplicative_corrections = torch.from_numpy(
             np.load(odir / 'multiplicative_corrections.npz')['arr_0'])
         contamination = torch.from_numpy(

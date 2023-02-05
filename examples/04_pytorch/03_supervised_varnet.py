@@ -229,9 +229,10 @@ def show_validation_batch(input, output, gt, mdl, save_dir):
 
     conv_output = mdl._neural_net(input).cpu().detach().numpy().squeeze()
     conv_output2 = mdl._neural_net(output).cpu().detach().numpy().squeeze()
+    conv_output3 = mdl._neural_net(gt).cpu().detach().numpy().squeeze()
 
     for ib in range(input.shape[0]):
-        fig, ax = plt.subplots(3, 6, figsize=(18, 9))
+        fig, ax = plt.subplots(2, 6, figsize=(18, 6))
         ground_truth = gt[ib, 0, ...].cpu().detach().numpy().squeeze()
         ax[0, 0].imshow(ground_truth, vmin=0, vmax=1.2)
         ax[0, 1].imshow(input[ib, 0, ...].cpu().detach().numpy().squeeze(),
@@ -279,6 +280,10 @@ def show_validation_batch(input, output, gt, mdl, save_dir):
                         vmax=vmax,
                         cmap=plt.cm.seismic)
         ax[1, 5].imshow(conv_output2[ib, ...],
+                        vmin=-vmax,
+                        vmax=vmax,
+                        cmap=plt.cm.seismic)
+        ax[1, 0].imshow(conv_output3[ib, ...],
                         vmin=-vmax,
                         vmax=vmax,
                         cmap=plt.cm.seismic)
@@ -342,6 +347,18 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', type=int, default=6)
     parser.add_argument('--num_features', type=int, default=10)
     parser.add_argument('--ckpt', type=str, default=None)
+    parser.add_argument('--input_seed', type=int, default=1)
+    parser.add_argument('--target_image_name', type=str, default='image.npz')
+    parser.add_argument('--training_data_dir',
+                        type=str,
+                        default='../data/training/OSEM_2D_5.00E+01')
+    parser.add_argument('--validation_data_dir',
+                        type=str,
+                        default='../data/validation/OSEM_2D_5.00E+01')
+    parser.add_argument('--loss',
+                        type=str,
+                        default='L1',
+                        choices=['L1', 'MSE'])
     args = parser.parse_args()
 
     if args.ckpt is None:
@@ -362,13 +379,22 @@ if __name__ == '__main__':
     num_blocks: int = args.num_blocks
     num_layers: int = args.num_layers
     num_features: int = args.num_features
+    input_seed: int = args.input_seed
+    target_image_name: str = args.target_image_name
+    loss: str = args.loss
 
-    training_data_dir: str = '../data/training/OSEM_2D_5.00E+01'
-    validation_data_dir: str = '../data/validation/OSEM_2D_5.00E+01'
+    training_data_dir: str = args.training_data_dir
+    validation_data_dir: str = args.validation_data_dir
 
     dtype = torch.float32
     device = torch.device("cuda:0")
-    loss_fct = torch.nn.L1Loss()
+
+    if loss == 'L1':
+        loss_fct = torch.nn.L1Loss()
+    elif loss == 'MSE':
+        loss_fct = torch.nn.MSELoss()
+    else:
+        raise ValueError
 
     i_out = 0
     output_dir = Path(f'run/{i_out:04}')
@@ -388,6 +414,9 @@ if __name__ == '__main__':
     #---------------------------------------------------------------------------
 
     training_data_set = OSEM2DDataSet(training_data_dir)
+    training_data_set.seed = input_seed
+    training_data_set.target_image_name = target_image_name
+
     training_data_loader = torch.utils.data.DataLoader(
         training_data_set,
         batch_size=batch_size,
@@ -398,6 +427,8 @@ if __name__ == '__main__':
         pin_memory_device='cuda:0')
 
     validation_data_set = OSEM2DDataSet(validation_data_dir)
+    validation_data_set.seed = input_seed
+    validation_data_set.target_image_name = target_image_name
     validation_data_loader = torch.utils.data.DataLoader(
         validation_data_set,
         batch_size=batch_size,
