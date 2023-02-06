@@ -9,7 +9,8 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
                  basedir: str,
                  seed: int = 1,
                  normalization_quantile: float = 0.99,
-                 verbose: bool = False) -> None:
+                 verbose: bool = False,
+                 search_pattern: str = '???_???_???') -> None:
         """simulated 2D PET data
 
         Parameters
@@ -20,13 +21,17 @@ class OSEM2DDataSet(torch.utils.data.Dataset):
             seed used for random generator, by default 1
         normalization_quantile : float, optional
             quantile used to normalize the OSEM and true image, by default 0.99
+        verbose: bool, optional
+            print verbose output, by default False
+        search_pattern: str, optional
+            search pattern used to find data sets, default '???_???_???'
         """
         self._basedir = Path(basedir)
         self._seed = seed
         self._normalization_quantile = normalization_quantile
         self._verbose = verbose
 
-        self._dir_list = sorted(self._basedir.glob('???_???_???'))
+        self._dir_list = sorted(self._basedir.glob(search_pattern))
 
         self._target_image_name = 'image.npz'
 

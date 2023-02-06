@@ -141,7 +141,7 @@ class PETVarNet(torch.nn.Module):
 #---------------------------------------------------------------------
 
 
-def training_loop(dataloader, model, loss_fn, optimizer):
+def training_loop(dataloader, model, loss_fn, optimizer, device):
 
     loss_list = []
     model.train()
@@ -178,7 +178,7 @@ def training_loop(dataloader, model, loss_fn, optimizer):
 
         if i % 30 == 0:
             print(
-                f'{(i+1):03} / {(dataloader.dataset.__len__() // batch_size):03} loss: {loss_list[-1]:.2E}'
+                f'{(i+1):03} / {(dataloader.dataset.__len__() // dataloader.batch_size):03} loss: {loss_list[-1]:.2E}'
             )
 
     return loss_list
@@ -187,7 +187,7 @@ def training_loop(dataloader, model, loss_fn, optimizer):
 #------------------------------------------------------------------------------------------------------
 
 
-def validation_loop(dataloader, model, loss_fn, save_dir):
+def validation_loop(dataloader, model, loss_fn, save_dir, device):
 
     num_batches = len(dataloader)
     val_loss = 0.
@@ -342,7 +342,6 @@ def plot_validation_loss(loss: np.ndarray, save_dir: Path):
 #------------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-
     import argparse
     import json
 
@@ -487,9 +486,9 @@ if __name__ == '__main__':
     for epoch in np.arange(num_epochs):
         print(f'epoch {(epoch+1):04} / {num_epochs:04}')
         training_loss += training_loop(training_data_loader, model, loss_fct,
-                                       optimizer)
+                                       optimizer, device)
         validation_loss[epoch] = validation_loop(validation_data_loader, model,
-                                                 loss_fct, output_dir)
+                                                 loss_fct, output_dir, device)
 
         # save the last checkpoint
         torch.save(
