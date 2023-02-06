@@ -15,6 +15,8 @@ from layers import LinearSubsetForwardLayer, LinearSubsetAdjointLayer
 from datasets import OSEM2DDataSet
 from models import sequential_conv_model
 
+from torchmetrics import PeakSignalNoiseRatio
+
 
 class PETVarNet(torch.nn.Module):
     """dummy cascaded model that includes layers combining projections and convolutions"""
@@ -188,7 +190,9 @@ def training_loop(dataloader, model, loss_fn, optimizer):
 def validation_loop(dataloader, model, loss_fn, save_dir):
 
     num_batches = len(dataloader)
-    val_loss = 0
+    val_loss = 0.
+    psnr = PeakSignalNoiseRatio(data_range=1.).to(device)
+    average_psnr = 0.
     model.eval()
 
     with torch.no_grad():
@@ -215,10 +219,13 @@ def validation_loop(dataloader, model, loss_fn, save_dir):
                                   contamination, adjoint_ones, norm)
 
             val_loss += loss_fn(x_fwd, image)
+            average_psnr += psnr(x_fwd, image)
 
     val_loss /= num_batches
+    average_psnr /= num_batches
 
-    print(f'validation loss: {val_loss:.2E}')
+    print(f'validation loss .: {val_loss:.2E}')
+    print(f'average psnr    .: {average_psnr:.2E}')
 
     show_validation_batch(osem, x_fwd, image, model, save_dir)
 
