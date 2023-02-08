@@ -1,6 +1,131 @@
+import numpy as np
 import torch
 import collections
+import pyparallelproj.petprojectors as petprojectors
+from layers import LinearSubsetForwardLayer, LinearSubsetAdjointLayer
 
+
+class PETVarNet(torch.nn.Module):
+    """dummy cascaded model that includes layers combining projections and convolutions"""
+
+    def __init__(
+        self,
+        proj: petprojectors.PETJosephProjector,
+        neural_net: torch.nn.Module,
+        num_blocks: int = 4,
+    ) -> None:
+
+        super().__init__()
+        self._proj = proj
+        self._neural_net = neural_net
+
+        self._num_blocks = num_blocks
+        self._subsets_to_use = np.linspace(0,
+                                           self._proj.subsetter.num_subsets,
+                                           self._num_blocks,
+                                           endpoint=False).astype(int)
+
+        self._neural_net_weight = torch.nn.Parameter(torch.tensor(1.0))
+
+        self._pet_fwd_subset = LinearSubsetForwardLayer.apply
+        self._pet_adjoint_subset = LinearSubsetAdjointLayer.apply
+
+    def _data_fidelity_subset_update(self, osem: torch.Tensor,
+                                     data: torch.Tensor,
+                                     multiplicative_corrections: torch.Tensor,
+                                     contamination: torch.Tensor,
+                                     adjoint_ones: torch.Tensor,
+                                     norm: torch.Tensor,
+                                     subset: int) -> torch.Tensor:
+        """subset data fidelity update for batch of images
+
+        Parameters
+        ----------
+        osem : torch.Tensor
+            batch of normalized OSEM images, shape (batch_size,0,n0,n1,1)
+        data : torch.Tensor
+            batch of (subset chunked) emission sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        multiplicative_corrections : torch.Tensor
+            batch of (subset chunked) mult. correction sinograms, shape (batch_size, num_subsets, num_subset_lors, 1)
+        contamination : torch.Tensor
+            batch of (subset chunked) contamination sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        adjoint_ones : torch.Tensor
+            batch of adjoint ones (subset sensitivity image), shape (batch_size, num_subsets, n0, n1, 1)
+        norm : torch.Tensor
+            batch of OSEM image normalization factors, shape (batch_size)
+            "unnormalized image" = norm[i_batch] * osem[i_batch,...]
+
+        Returns
+        -------
+        torch.Tensor
+            batch of image passed through the model
+        """
+
+        num_batch = osem.shape[0]
+
+        output_tensor = torch.zeros_like(osem)
+
+        for i in range(num_batch):
+            unscaled_image = norm[i] * osem[i, 0, ...]
+
+            # calculate the PET subset  forward step
+            expected_data = multiplicative_corrections[
+                i, subset, ...] * self._pet_fwd_subset(
+                    unscaled_image, self._proj, subset) + contamination[i,
+                                                                        subset,
+                                                                        ...]
+
+            # Poisson logL update
+            unscaled_update = self._pet_adjoint_subset(
+                multiplicative_corrections[i, subset, ...] *
+                (1 - data[i, subset, ...] / expected_data), self._proj,
+                subset) * (unscaled_image / adjoint_ones[i, subset, ...])
+
+            output_tensor[i, 0, ...] = unscaled_update / norm[i]
+
+        return output_tensor
+
+    def forward(self, osem: torch.Tensor, data: torch.Tensor,
+                multiplicative_corrections: torch.Tensor,
+                contamination: torch.Tensor, adjoint_ones: torch.Tensor,
+                norm: torch.Tensor) -> torch.Tensor:
+        """forward pass of model
+
+        Parameters
+        ----------
+        osem : torch.Tensor
+            batch of normalized OSEM images, shape (batch_size,0,n0,n1,1)
+        data : torch.Tensor
+            batch of (subset chunked) emission sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        multiplicative_corrections : torch.Tensor
+            batch of (subset chunked) mult. correction sinograms, shape (batch_size, num_subsets, num_subset_lors, 1)
+        contamination : torch.Tensor
+            batch of (subset chunked) contamination sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
+        adjoint_ones : torch.Tensor
+            batch of adjoint ones (subset sensitivity image), shape (batch_size, num_subsets, n0, n1, 1)
+        norm : torch.Tensor
+            batch of OSEM image normalization factors, shape (batch_size)
+            "unnormalized image" = norm[i_batch] * osem[i_batch,...]
+
+        Returns
+        -------
+        torch.Tensor
+            batch of image passed through the model
+        """
+
+        x = osem
+
+        for subset in self._subsets_to_use:
+            x_data = self._data_fidelity_subset_update(
+                x, data, multiplicative_corrections, contamination,
+                adjoint_ones, norm, subset)
+            x_net = self._neural_net(x)
+            x = torch.nn.ReLU()(x - x_data + self._neural_net_weight * x_net)
+
+        return x
+
+
+#_--------------------------------------------------------------------------------
 
 def sequential_conv_model(device=torch.device("cuda:0"),
                           kernel_size=(3, 3, 1),

@@ -8,135 +8,11 @@ from scipy.ndimage import gaussian_filter
 import torch
 import dill
 
-import pyparallelproj.petprojectors as petprojectors
-
 from pathlib import Path
-from layers import LinearSubsetForwardLayer, LinearSubsetAdjointLayer
 from datasets import OSEM2DDataSet
-from models import sequential_conv_model
+from models import sequential_conv_model, PETVarNet
 
 from torchmetrics import PeakSignalNoiseRatio
-
-
-class PETVarNet(torch.nn.Module):
-    """dummy cascaded model that includes layers combining projections and convolutions"""
-
-    def __init__(
-        self,
-        proj: petprojectors.PETJosephProjector,
-        neural_net: torch.nn.Module,
-        num_blocks: int = 4,
-    ) -> None:
-
-        super().__init__()
-        self._proj = proj
-        self._neural_net = neural_net
-
-        self._num_blocks = num_blocks
-        self._subsets_to_use = np.linspace(0,
-                                           self._proj.subsetter.num_subsets,
-                                           self._num_blocks,
-                                           endpoint=False).astype(int)
-
-        self._neural_net_weight = torch.nn.Parameter(torch.tensor(1.0))
-
-        self._pet_fwd_subset = LinearSubsetForwardLayer.apply
-        self._pet_adjoint_subset = LinearSubsetAdjointLayer.apply
-
-    def _data_fidelity_subset_update(self, osem: torch.Tensor,
-                                     data: torch.Tensor,
-                                     multiplicative_corrections: torch.Tensor,
-                                     contamination: torch.Tensor,
-                                     adjoint_ones: torch.Tensor,
-                                     norm: torch.Tensor,
-                                     subset: int) -> torch.Tensor:
-        """subset data fidelity update for batch of images
-
-        Parameters
-        ----------
-        osem : torch.Tensor
-            batch of normalized OSEM images, shape (batch_size,0,n0,n1,1)
-        data : torch.Tensor
-            batch of (subset chunked) emission sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
-        multiplicative_corrections : torch.Tensor
-            batch of (subset chunked) mult. correction sinograms, shape (batch_size, num_subsets, num_subset_lors, 1)
-        contamination : torch.Tensor
-            batch of (subset chunked) contamination sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
-        adjoint_ones : torch.Tensor
-            batch of adjoint ones (subset sensitivity image), shape (batch_size, num_subsets, n0, n1, 1)
-        norm : torch.Tensor
-            batch of OSEM image normalization factors, shape (batch_size)
-            "unnormalized image" = norm[i_batch] * osem[i_batch,...]
-
-        Returns
-        -------
-        torch.Tensor
-            batch of image passed through the model
-        """
-
-        num_batch = osem.shape[0]
-
-        output_tensor = torch.zeros_like(osem)
-
-        for i in range(num_batch):
-            unscaled_image = norm[i] * osem[i, 0, ...]
-
-            # calculate the PET subset  forward step
-            expected_data = multiplicative_corrections[
-                i, subset, ...] * self._pet_fwd_subset(
-                    unscaled_image, self._proj, subset) + contamination[i,
-                                                                        subset,
-                                                                        ...]
-
-            # Poisson logL update
-            unscaled_update = self._pet_adjoint_subset(
-                multiplicative_corrections[i, subset, ...] *
-                (1 - data[i, subset, ...] / expected_data), self._proj,
-                subset) * (unscaled_image / adjoint_ones[i, subset, ...])
-
-            output_tensor[i, 0, ...] = unscaled_update / norm[i]
-
-        return output_tensor
-
-    def forward(self, osem: torch.Tensor, data: torch.Tensor,
-                multiplicative_corrections: torch.Tensor,
-                contamination: torch.Tensor, adjoint_ones: torch.Tensor,
-                norm: torch.Tensor) -> torch.Tensor:
-        """forward pass of model
-
-        Parameters
-        ----------
-        osem : torch.Tensor
-            batch of normalized OSEM images, shape (batch_size,0,n0,n1,1)
-        data : torch.Tensor
-            batch of (subset chunked) emission sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
-        multiplicative_corrections : torch.Tensor
-            batch of (subset chunked) mult. correction sinograms, shape (batch_size, num_subsets, num_subset_lors, 1)
-        contamination : torch.Tensor
-            batch of (subset chunked) contamination sinograms, shape (batch_size, num_subsets, num_subset_lors, num_tof_bins)
-        adjoint_ones : torch.Tensor
-            batch of adjoint ones (subset sensitivity image), shape (batch_size, num_subsets, n0, n1, 1)
-        norm : torch.Tensor
-            batch of OSEM image normalization factors, shape (batch_size)
-            "unnormalized image" = norm[i_batch] * osem[i_batch,...]
-
-        Returns
-        -------
-        torch.Tensor
-            batch of image passed through the model
-        """
-
-        x = osem
-
-        for subset in self._subsets_to_use:
-            x_data = self._data_fidelity_subset_update(
-                x, data, multiplicative_corrections, contamination,
-                adjoint_ones, norm, subset)
-            x_net = self._neural_net(x)
-            x = torch.nn.ReLU()(x - x_data + self._neural_net_weight * x_net)
-
-        return x
-
 
 #---------------------------------------------------------------------
 
@@ -365,6 +241,12 @@ if __name__ == '__main__':
                         type=str,
                         default='L1',
                         choices=['L1', 'MSE'])
+    parser.add_argument('--training_search_pattern',
+                        type=str,
+                        default='???_???_???')
+    parser.add_argument('--validation_search_pattern',
+                        type=str,
+                        default='???_???_???')
     args = parser.parse_args()
 
     if args.ckpt is None:
@@ -389,8 +271,11 @@ if __name__ == '__main__':
     target_image_name: str = args.target_image_name
     loss: str = args.loss
 
-    training_data_dir: str = args.training_data_dir
-    validation_data_dir: str = args.validation_data_dir
+    training_data_dir: str = str(Path(args.training_data_dir).resolve())
+    validation_data_dir: str = str(Path(args.validation_data_dir).resolve())
+
+    training_search_pattern: str = args.training_search_pattern
+    validation_search_pattern: str = args.validation_search_pattern
 
     dtype = torch.float32
     device = torch.device("cuda:0")
@@ -419,7 +304,8 @@ if __name__ == '__main__':
     #--- setup the data loaders ------------------------------------------------
     #---------------------------------------------------------------------------
 
-    training_data_set = OSEM2DDataSet(training_data_dir)
+    training_data_set = OSEM2DDataSet(training_data_dir,
+                                      search_pattern=training_search_pattern)
     training_data_set.seed = input_seed
     training_data_set.target_image_name = target_image_name
 
@@ -432,7 +318,8 @@ if __name__ == '__main__':
         pin_memory=True,
         pin_memory_device='cuda:0')
 
-    validation_data_set = OSEM2DDataSet(validation_data_dir)
+    validation_data_set = OSEM2DDataSet(
+        validation_data_dir, search_pattern=validation_search_pattern)
     validation_data_set.seed = input_seed
     validation_data_set.target_image_name = target_image_name
     validation_data_loader = torch.utils.data.DataLoader(
@@ -443,6 +330,12 @@ if __name__ == '__main__':
         num_workers=5,
         pin_memory=True,
         pin_memory_device='cuda:0')
+
+    # write the data sets used for training and validation to json files
+    with open(output_dir / 'training_data_sets.json', 'w') as f:
+        json.dump([str(x) for x in training_data_set.dir_list], f)
+    with open(output_dir / 'validation_data_sets.json', 'w') as f:
+        json.dump([str(x) for x in validation_data_set.dir_list], f)
 
     #---------------------------------------------------------------------------
     #--- load the projector ----------------------------------------------------
