@@ -362,11 +362,13 @@ if __name__ == '__main__':
         conv_net = Unet3D(device=device,
                           kernel_size=(3, 3, 1),
                           num_features=num_features,
+                          num_downsampling_layers=num_layers,
                           dtype=torch.float32)
     else:
         raise ValueError
 
     print(conv_net)
+    print(sum(p.numel() for p in conv_net.parameters()))
 
     model = PETVarNet(projector, conv_net, num_blocks=num_blocks)
 
