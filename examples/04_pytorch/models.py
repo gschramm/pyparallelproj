@@ -190,6 +190,7 @@ class Unet3D(torch.nn.Module):
     def __init__(self,
                  device,
                  num_features: int = 8,
+                 num_downsampling_layers: int = 3,
                  kernel_size: tuple[int, int, int] = (3, 3, 1),
                  dtype=torch.float32) -> None:
 
@@ -199,49 +200,38 @@ class Unet3D(torch.nn.Module):
         self._num_features = num_features
         self._kernel_size = kernel_size
         self._dtype = dtype
+        self._num_downsampling_layers = num_downsampling_layers
 
         self._pool = torch.nn.MaxPool3d((2, 2, 1))
 
-        self._encoder_block_00 = self._conv_block(1, 1 * num_features,
-                                                  1 * num_features)
-        self._encoder_block_01 = self._conv_block(1 * num_features,
-                                                  2 * num_features,
-                                                  2 * num_features)
-        self._encoder_block_02 = self._conv_block(2 * num_features,
-                                                  4 * num_features,
-                                                  4 * num_features)
-        self._encoder_block_03 = self._conv_block(4 * num_features,
-                                                  8 * num_features,
-                                                  8 * num_features)
+        self._encoder_blocks = []
 
-        self._upsample_00 = torch.nn.ConvTranspose3d(8 * num_features,
-                                                     4 * num_features,
-                                                     kernel_size=(2, 2, 1),
-                                                     stride=2,
-                                                     device=device)
+        # first encoder block that takes input
+        self._encoder_blocks.append(
+            self._conv_block(1, num_features, num_features))
 
-        self._upsample_01 = torch.nn.ConvTranspose3d(4 * num_features,
-                                                     2 * num_features,
-                                                     kernel_size=(2, 2, 1),
-                                                     stride=2,
-                                                     device=device)
+        for i in range(self._num_downsampling_layers):
+            self._encoder_blocks.append(
+                self._conv_block((2**i) * num_features,
+                                 (2**(i + 1)) * num_features,
+                                 (2**(i + 1)) * num_features))
 
-        self._upsample_02 = torch.nn.ConvTranspose3d(2 * num_features,
-                                                     1 * num_features,
-                                                     kernel_size=(2, 2, 1),
-                                                     stride=2,
-                                                     device=device)
+        self._upsamples = []
+        self._decoder_blocks = []
 
-        self._decoder_block_00 = self._conv_block(8 * num_features,
-                                                  4 * num_features,
-                                                  4 * num_features)
+        for i in range(self._num_downsampling_layers):
+            n = self._num_downsampling_layers - i
+            self._upsamples.append(
+                torch.nn.ConvTranspose3d((2**n) * num_features,
+                                         (2**(n - 1)) * num_features,
+                                         kernel_size=(2, 2, 1),
+                                         stride=2,
+                                         device=device))
 
-        self._decoder_block_01 = self._conv_block(4 * num_features,
-                                                  2 * num_features,
-                                                  2 * num_features)
-
-        self._decoder_block_02 = self._conv_block(2 * num_features,
-                                                  num_features, num_features)
+            self._decoder_blocks.append(
+                self._conv_block((2**n) * num_features,
+                                 (2**(n - 1)) * num_features,
+                                 (2**(n - 1)) * num_features))
 
         self._final_conv = torch.nn.Conv3d(num_features,
                                            1, (1, 1, 1),
@@ -277,23 +267,24 @@ class Unet3D(torch.nn.Module):
         return conv_block
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x0 = self._encoder_block_00(x)
-        x1 = self._encoder_block_01(self._pool(x0))
-        x2 = self._encoder_block_02(self._pool(x1))
+        x_down = []
+        x_up = []
 
-        # the last encoder block is the bottleneck
-        x_bottle = self._encoder_block_03(self._pool(x2))
+        x_down.append(self._encoder_blocks[0](x))
 
-        x_up_0 = self._decoder_block_00(
-            torch.cat([x2, self._upsample_00(x_bottle)], dim=1))
+        for i in range(self._num_downsampling_layers):
+            x_down.append(self._encoder_blocks[i + 1](self._pool(x_down[i])))
 
-        x_up_1 = self._decoder_block_01(
-            torch.cat([x1, self._upsample_01(x_up_0)], dim=1))
+        x_up.append(x_down[-1])
 
-        x_up_2 = self._decoder_block_02(
-            torch.cat([x0, self._upsample_02(x_up_1)], dim=1))
+        for i in range(self._num_downsampling_layers):
+            x_up.append(self._decoder_blocks[i](torch.cat([
+                x_down[self._num_downsampling_layers -
+                       (i + 1)], self._upsamples[i](x_up[-1])
+            ],
+                                                          dim=1)))
 
-        xout = self._final_conv(x_up_2)
+        xout = self._final_conv(x_up[-1])
 
         return xout
 
@@ -304,11 +295,13 @@ if __name__ == '__main__':
     device = torch.device("cuda:0")
     dtype = torch.float32
 
-    x = torch.rand(4, 1, 128, 128, 1, dtype=dtype).to(device)
-    model = Unet3D(device, dtype=dtype)
-    y = model(x)
+    for i in [1, 2, 3, 4, 5]:
+        x = torch.rand(4, 1, 128, 128, 1, dtype=dtype).to(device)
+        model = Unet3D(device, dtype=dtype, num_downsampling_layers=i)
+        print(sum(p.numel() for p in model.parameters()))
+        y = model(x)
 
-    make_dot(y,
-             params=dict(model.named_parameters()),
-             show_attrs=True,
-             show_saved=True).render('test')
+        make_dot(y,
+                 params=dict(model.named_parameters()),
+                 show_attrs=True,
+                 show_saved=True).render(f'test_{i}')
