@@ -204,7 +204,9 @@ class Unet3D(torch.nn.Module):
 
         self._pool = torch.nn.MaxPool3d((2, 2, 1))
 
-        self._encoder_blocks = []
+        self._encoder_blocks = torch.nn.ModuleList()
+        self._upsamples = torch.nn.ModuleList()
+        self._decoder_blocks = torch.nn.ModuleList()
 
         # first encoder block that takes input
         self._encoder_blocks.append(
@@ -215,9 +217,6 @@ class Unet3D(torch.nn.Module):
                 self._conv_block((2**i) * num_features,
                                  (2**(i + 1)) * num_features,
                                  (2**(i + 1)) * num_features))
-
-        self._upsamples = []
-        self._decoder_blocks = []
 
         for i in range(self._num_downsampling_layers):
             n = self._num_downsampling_layers - i
@@ -297,7 +296,10 @@ if __name__ == '__main__':
 
     for i in [1, 2, 3, 4, 5]:
         x = torch.rand(4, 1, 128, 128, 1, dtype=dtype).to(device)
-        model = Unet3D(device, dtype=dtype, num_downsampling_layers=i)
+        model = Unet3D(device,
+                       dtype=dtype,
+                       num_downsampling_layers=i,
+                       num_features=16)
         print(sum(p.numel() for p in model.parameters()))
         y = model(x)
 
