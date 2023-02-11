@@ -200,47 +200,48 @@ class Unet3D(torch.nn.Module):
         self._kernel_size = kernel_size
         self._dtype = dtype
 
-        self._encoder_block_1 = self._conv_block(1, num_features, num_features)
-        self._encoder_block_2 = self._conv_block(num_features,
-                                                 2 * num_features,
-                                                 2 * num_features)
-        self._encoder_block_3 = self._conv_block(2 * num_features,
-                                                 4 * num_features,
-                                                 4 * num_features)
-        self._encoder_block_4 = self._conv_block(4 * num_features,
-                                                 8 * num_features,
-                                                 8 * num_features)
-
         self._pool = torch.nn.MaxPool3d((2, 2, 1))
 
-        self._upsample_4 = torch.nn.ConvTranspose3d(8 * num_features,
-                                                    4 * num_features,
-                                                    kernel_size=(2, 2, 1),
-                                                    stride=2,
-                                                    device=device)
+        self._encoder_block_00 = self._conv_block(1, 1 * num_features,
+                                                  1 * num_features)
+        self._encoder_block_01 = self._conv_block(1 * num_features,
+                                                  2 * num_features,
+                                                  2 * num_features)
+        self._encoder_block_02 = self._conv_block(2 * num_features,
+                                                  4 * num_features,
+                                                  4 * num_features)
+        self._encoder_block_03 = self._conv_block(4 * num_features,
+                                                  8 * num_features,
+                                                  8 * num_features)
 
-        self._upsample_3 = torch.nn.ConvTranspose3d(4 * num_features,
-                                                    2 * num_features,
-                                                    kernel_size=(2, 2, 1),
-                                                    stride=2,
-                                                    device=device)
+        self._upsample_00 = torch.nn.ConvTranspose3d(8 * num_features,
+                                                     4 * num_features,
+                                                     kernel_size=(2, 2, 1),
+                                                     stride=2,
+                                                     device=device)
 
-        self._upsample_2 = torch.nn.ConvTranspose3d(2 * num_features,
-                                                    num_features,
-                                                    kernel_size=(2, 2, 1),
-                                                    stride=2,
-                                                    device=device)
+        self._upsample_01 = torch.nn.ConvTranspose3d(4 * num_features,
+                                                     2 * num_features,
+                                                     kernel_size=(2, 2, 1),
+                                                     stride=2,
+                                                     device=device)
 
-        self._decoder_block_3 = self._conv_block(8 * num_features,
-                                                 4 * num_features,
-                                                 4 * num_features)
+        self._upsample_02 = torch.nn.ConvTranspose3d(2 * num_features,
+                                                     1 * num_features,
+                                                     kernel_size=(2, 2, 1),
+                                                     stride=2,
+                                                     device=device)
 
-        self._decoder_block_2 = self._conv_block(4 * num_features,
-                                                 2 * num_features,
-                                                 2 * num_features)
+        self._decoder_block_00 = self._conv_block(8 * num_features,
+                                                  4 * num_features,
+                                                  4 * num_features)
 
-        self._decoder_block_1 = self._conv_block(2 * num_features,
-                                                 num_features, num_features)
+        self._decoder_block_01 = self._conv_block(4 * num_features,
+                                                  2 * num_features,
+                                                  2 * num_features)
+
+        self._decoder_block_02 = self._conv_block(2 * num_features,
+                                                  num_features, num_features)
 
         self._final_conv = torch.nn.Conv3d(num_features,
                                            1, (1, 1, 1),
@@ -276,30 +277,38 @@ class Unet3D(torch.nn.Module):
         return conv_block
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x1 = self._encoder_block_1(x)
-        x2 = self._encoder_block_2(self._pool(x1))
-        x3 = self._encoder_block_3(self._pool(x2))
+        x0 = self._encoder_block_00(x)
+        x1 = self._encoder_block_01(self._pool(x0))
+        x2 = self._encoder_block_02(self._pool(x1))
 
         # the last encoder block is the bottleneck
-        x4 = self._encoder_block_4(self._pool(x3))
+        x_bottle = self._encoder_block_03(self._pool(x2))
 
-        x3up = self._decoder_block_3(
-            torch.cat([x3, self._upsample_4(x4)], dim=1))
+        x_up_0 = self._decoder_block_00(
+            torch.cat([x2, self._upsample_00(x_bottle)], dim=1))
 
-        x2up = self._decoder_block_2(
-            torch.cat([x2, self._upsample_3(x3up)], dim=1))
+        x_up_1 = self._decoder_block_01(
+            torch.cat([x1, self._upsample_01(x_up_0)], dim=1))
 
-        x1up = self._decoder_block_1(
-            torch.cat([x1, self._upsample_2(x2up)], dim=1))
+        x_up_2 = self._decoder_block_02(
+            torch.cat([x0, self._upsample_02(x_up_1)], dim=1))
 
-        xout = self._final_conv(x1up)
+        xout = self._final_conv(x_up_2)
 
         return xout
 
 
 if __name__ == '__main__':
+    from torchviz import make_dot
+
     device = torch.device("cuda:0")
     dtype = torch.float32
-    x = torch.rand(4, 1, 128, 128, 1, dtype=dtype).to(device)
 
+    x = torch.rand(4, 1, 128, 128, 1, dtype=dtype).to(device)
     model = Unet3D(device, dtype=dtype)
+    y = model(x)
+
+    make_dot(y,
+             params=dict(model.named_parameters()),
+             show_attrs=True,
+             show_saved=True).render('test')
