@@ -226,7 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--model_type', type=str, default='sequential')
-    parser.add_argument('--num_blocks', type=int, default=4)
+    parser.add_argument('--num_blocks', type=int, default=8)
     parser.add_argument('--num_layers', type=int, default=6)
     parser.add_argument('--num_features', type=int, default=8)
     parser.add_argument('--ckpt', type=str, default=None)
