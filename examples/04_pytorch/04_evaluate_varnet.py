@@ -10,7 +10,7 @@ import dill
 
 from pathlib import Path
 from datasets import OSEM2DDataSet
-from models import sequential_conv_model, PETVarNet
+from models import sequential_conv_model, Unet3D, PETVarNet
 
 import pymirc.viewer as pv
 
@@ -59,6 +59,11 @@ validation_data_dir: str = args.validation_data_dir
 search_pattern: str = args.search_pattern
 sm_fwhm_mm: float = args.sm_fwhm_mm
 
+if 'model_type' in config:
+    model_type = config['model_type']
+else:
+    model_type = 'sequential'
+
 dtype = torch.float32
 device = torch.device("cuda:0")
 
@@ -94,11 +99,21 @@ with open(validation_data_set.dir_list[0] / 'projector.pkl', 'rb') as f:
 #---------------------------------------------------------------------------
 #--- define a simple conv net that maps an image onto an image -------------
 #---------------------------------------------------------------------------
-conv_net = sequential_conv_model(device=device,
-                                 kernel_size=(3, 3, 1),
-                                 num_layers=num_layers,
-                                 num_features=num_features,
-                                 dtype=torch.float32)
+if model_type == 'sequential':
+    conv_net = sequential_conv_model(device=device,
+                                     kernel_size=(3, 3, 1),
+                                     num_layers=num_layers,
+                                     num_features=num_features,
+                                     dtype=torch.float32)
+elif model_type == 'unet':
+    conv_net = Unet3D(device=device,
+                      kernel_size=(3, 3, 1),
+                      num_features=num_features,
+                      dtype=torch.float32)
+else:
+    raise ValueError
+
+print(conv_net)
 
 model = PETVarNet(projector, conv_net, num_blocks=num_blocks)
 

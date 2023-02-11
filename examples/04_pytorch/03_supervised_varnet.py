@@ -10,7 +10,7 @@ import dill
 
 from pathlib import Path
 from datasets import OSEM2DDataSet
-from models import sequential_conv_model, PETVarNet
+from models import sequential_conv_model, PETVarNet, Unet3D
 
 from torchmetrics import PeakSignalNoiseRatio
 
@@ -225,9 +225,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
+    parser.add_argument('--model_type', type=str, default='sequential')
     parser.add_argument('--num_blocks', type=int, default=4)
     parser.add_argument('--num_layers', type=int, default=6)
-    parser.add_argument('--num_features', type=int, default=10)
+    parser.add_argument('--num_features', type=int, default=8)
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--input_seed', type=int, default=1)
     parser.add_argument('--target_image_name', type=str, default='image.npz')
@@ -270,6 +271,7 @@ if __name__ == '__main__':
     input_seed: int = args.input_seed
     target_image_name: str = args.target_image_name
     loss: str = args.loss
+    model_type: str = args.model_type
 
     training_data_dir: str = str(Path(args.training_data_dir).resolve())
     validation_data_dir: str = str(Path(args.validation_data_dir).resolve())
@@ -349,11 +351,22 @@ if __name__ == '__main__':
     #---------------------------------------------------------------------------
     #--- define a simple conv net that maps an image onto an image -------------
     #---------------------------------------------------------------------------
-    conv_net = sequential_conv_model(device=device,
-                                     kernel_size=(3, 3, 1),
-                                     num_layers=num_layers,
-                                     num_features=num_features,
-                                     dtype=torch.float32)
+
+    if model_type == 'sequential':
+        conv_net = sequential_conv_model(device=device,
+                                         kernel_size=(3, 3, 1),
+                                         num_layers=num_layers,
+                                         num_features=num_features,
+                                         dtype=torch.float32)
+    elif model_type == 'unet':
+        conv_net = Unet3D(device=device,
+                          kernel_size=(3, 3, 1),
+                          num_features=num_features,
+                          dtype=torch.float32)
+    else:
+        raise ValueError
+
+    print(conv_net)
 
     model = PETVarNet(projector, conv_net, num_blocks=num_blocks)
 
