@@ -248,6 +248,9 @@ if __name__ == '__main__':
     parser.add_argument('--validation_search_pattern',
                         type=str,
                         default='???_???_???')
+    parser.add_argument('--batch_norm', action='store_true')
+    parser.add_argument('--dropout_rate', type=float, default=0.)
+
     args = parser.parse_args()
 
     if args.ckpt is None:
@@ -272,6 +275,8 @@ if __name__ == '__main__':
     target_image_name: str = args.target_image_name
     loss: str = args.loss
     model_type: str = args.model_type
+    batch_norm: bool = args.batch_norm
+    dropout_rate: float = args.dropout_rate
 
     training_data_dir: str = str(Path(args.training_data_dir).resolve())
     validation_data_dir: str = str(Path(args.validation_data_dir).resolve())
@@ -357,12 +362,15 @@ if __name__ == '__main__':
                                          kernel_size=(3, 3, 1),
                                          num_layers=num_layers,
                                          num_features=num_features,
+                                         batch_norm=batch_norm,
                                          dtype=torch.float32)
     elif model_type == 'unet':
         conv_net = Unet3D(device=device,
                           kernel_size=(3, 3, 1),
                           num_features=num_features,
                           num_downsampling_layers=num_layers,
+                          batch_norm=batch_norm,
+                          dropout_rate=dropout_rate,
                           dtype=torch.float32)
     else:
         raise ValueError

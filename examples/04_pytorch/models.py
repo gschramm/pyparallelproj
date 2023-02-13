@@ -132,6 +132,7 @@ def sequential_conv_model(device=torch.device("cuda:0"),
                           kernel_size=(3, 3, 1),
                           num_layers=6,
                           num_features=10,
+                          batch_norm: bool = False,
                           dtype=torch.float32) -> torch.nn.Sequential:
     """simple sequential model consisting of 3D conv layers and PReLUs
 
@@ -145,6 +146,8 @@ def sequential_conv_model(device=torch.device("cuda:0"),
         number of conv layers, by default 6
     num_features : int, optional
         number of features, by default 10
+    batch_norm : bool, optional
+        use batch norm, by default False
     dtype : optional
         data type for conv layers, by default torch.float32
 
@@ -161,6 +164,11 @@ def sequential_conv_model(device=torch.device("cuda:0"),
                                          padding='same',
                                          device=device,
                                          dtype=dtype)
+
+    if batch_norm:
+        conv_net['batch_norm_1'] = torch.nn.BatchNorm3d(num_features,
+                                                        device=device)
+
     conv_net['prelu_1'] = torch.nn.PReLU(device=device)
 
     for i in range(num_layers - 2):
@@ -170,6 +178,11 @@ def sequential_conv_model(device=torch.device("cuda:0"),
                                                   padding='same',
                                                   device=device,
                                                   dtype=dtype)
+
+        if batch_norm:
+            conv_net[f'batch_norm_{i+2}'] = torch.nn.BatchNorm3d(num_features,
+                                                                 device=device)
+
         conv_net[f'prelu_{i+2}'] = torch.nn.PReLU(device=device)
 
     conv_net[f'conv_{num_layers}'] = torch.nn.Conv3d(num_features,
@@ -192,6 +205,8 @@ class Unet3D(torch.nn.Module):
                  num_features: int = 8,
                  num_downsampling_layers: int = 3,
                  kernel_size: tuple[int, int, int] = (3, 3, 1),
+                 batch_norm: bool = False,
+                 dropout_rate: float = 0.,
                  dtype=torch.float32) -> None:
 
         super().__init__()
@@ -201,12 +216,15 @@ class Unet3D(torch.nn.Module):
         self._kernel_size = kernel_size
         self._dtype = dtype
         self._num_downsampling_layers = num_downsampling_layers
+        self._batch_norm = batch_norm
 
         self._pool = torch.nn.MaxPool3d((2, 2, 1))
 
         self._encoder_blocks = torch.nn.ModuleList()
         self._upsamples = torch.nn.ModuleList()
         self._decoder_blocks = torch.nn.ModuleList()
+
+        self._dropout = torch.nn.Dropout(dropout_rate)
 
         # first encoder block that takes input
         self._encoder_blocks.append(
@@ -251,6 +269,7 @@ class Unet3D(torch.nn.Module):
                                                padding='same',
                                                device=self._device,
                                                dtype=self._dtype)
+
         conv_block['activation_1'] = activation
 
         conv_block['conv_2'] = torch.nn.Conv3d(num_features_mid,
@@ -259,6 +278,11 @@ class Unet3D(torch.nn.Module):
                                                padding='same',
                                                device=self._device,
                                                dtype=self._dtype)
+
+        if self._batch_norm:
+            conv_block['batch_norm'] = torch.nn.BatchNorm3d(
+                num_features_out, device=self._device)
+
         conv_block['activation_2'] = activation
 
         conv_block = torch.nn.Sequential(conv_block)
@@ -274,7 +298,7 @@ class Unet3D(torch.nn.Module):
         for i in range(self._num_downsampling_layers):
             x_down.append(self._encoder_blocks[i + 1](self._pool(x_down[i])))
 
-        x_up.append(x_down[-1])
+        x_up.append(self._dropout(x_down[-1]))
 
         for i in range(self._num_downsampling_layers):
             x_up.append(self._decoder_blocks[i](torch.cat([

@@ -23,6 +23,7 @@ parser.add_argument('--input_seed', type=int, default=1)
 parser.add_argument('--target_image_name', type=str, default='image.npz')
 parser.add_argument('--validation_data_dir', type=str, default=None)
 parser.add_argument('--search_pattern', type=str, default=None)
+parser.add_argument('--num_blocks', type=int, default=None)
 parser.add_argument('--sm_fwhm_mm', type=float, default=6.)
 args = parser.parse_args()
 
@@ -46,7 +47,9 @@ if args.search_pattern is None:
     else:
         args.search_pattern = '047_???_???'
 
-args.num_blocks = config['num_blocks']
+if args.num_blocks is None:
+    args.num_blocks = config['num_blocks']
+
 args.num_layers = config['num_layers']
 args.num_features = config['num_features']
 
@@ -63,6 +66,16 @@ if 'model_type' in config:
     model_type = config['model_type']
 else:
     model_type = 'sequential'
+
+if 'batch_norm' in config:
+    batch_norm = config['batch_norm']
+else:
+    batch_norm = False
+
+if 'dropout_rate' in config:
+    dropout_rate = config['dropout_rate']
+else:
+    dropout_rate = 0.
 
 dtype = torch.float32
 device = torch.device("cuda:0")
@@ -109,6 +122,8 @@ elif model_type == 'unet':
     conv_net = Unet3D(device=device,
                       kernel_size=(3, 3, 1),
                       num_features=num_features,
+                      batch_norm=batch_norm,
+                      dropout_rate=dropout_rate,
                       dtype=torch.float32)
 else:
     raise ValueError
