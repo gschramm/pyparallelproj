@@ -1,3 +1,4 @@
 *.png
 run/*
 run*.sh
+wip_*.py
