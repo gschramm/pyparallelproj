@@ -1,9 +1,9 @@
 import abc
 import numpy as np
 import numpy.typing as npt
+import parallelproj
 
 from . import coincidences
-from . import wrapper
 from . import subsets
 from . import operators
 from . import tof
@@ -251,14 +251,14 @@ class PETJosephProjector(PETProjector):
         if not self.tof:
             image_forward = self.xp.zeros(xstart.shape[0],
                                           dtype=self.xp.float32)
-            wrapper.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
-                                 self.image_origin, self.voxel_size,
-                                 image_forward)
+            parallelproj.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
+                                      self.image_origin, self.voxel_size,
+                                      image_forward)
         else:
             image_forward = self.xp.zeros(
                 (xstart.shape[0], self.tof_parameters.num_tofbins),
                 dtype=self.xp.float32)
-            wrapper.joseph3d_fwd_tof_sino(
+            parallelproj.joseph3d_fwd_tof_sino(
                 xstart, xend, x.astype(self.xp.float32), self.image_origin,
                 self.voxel_size, image_forward,
                 self.tof_parameters.tofbin_width,
@@ -285,11 +285,11 @@ class PETJosephProjector(PETProjector):
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
 
         if not self.tof:
-            wrapper.joseph3d_back(xstart, xend, back_image, self.image_origin,
-                                  self.voxel_size,
-                                  y_subset.astype(self.xp.float32))
+            parallelproj.joseph3d_back(xstart, xend, back_image,
+                                       self.image_origin, self.voxel_size,
+                                       y_subset.astype(self.xp.float32))
         else:
-            wrapper.joseph3d_back_tof_sino(
+            parallelproj.joseph3d_back_tof_sino(
                 xstart, xend, back_image, self.image_origin, self.voxel_size,
                 y_subset.astype(self.xp.float32),
                 self.tof_parameters.tofbin_width,
@@ -312,14 +312,14 @@ class PETJosephProjector(PETProjector):
         image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)
 
         if not self.tof:
-            wrapper.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
-                                 self.image_origin, self.voxel_size,
-                                 image_forward)
+            parallelproj.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
+                                      self.image_origin, self.voxel_size,
+                                      image_forward)
         else:
             tofbin = self.xp.ascontiguousarray(
                 self.events.get_event_tof_bins(subset_inds))
 
-            wrapper.joseph3d_fwd_tof_lm(
+            parallelproj.joseph3d_fwd_tof_lm(
                 xstart, xend, x.astype(self.xp.float32), self.image_origin,
                 self.voxel_size, image_forward,
                 self.tof_parameters.tofbin_width,
@@ -341,14 +341,14 @@ class PETJosephProjector(PETProjector):
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
 
         if not self.tof:
-            wrapper.joseph3d_back(xstart, xend, back_image, self.image_origin,
-                                  self.voxel_size,
-                                  y_subset.astype(self.xp.float32))
+            parallelproj.joseph3d_back(xstart, xend, back_image,
+                                       self.image_origin, self.voxel_size,
+                                       y_subset.astype(self.xp.float32))
         else:
             tofbin = self.xp.ascontiguousarray(
                 self.events.get_event_tof_bins(subset_inds))
 
-            wrapper.joseph3d_back_tof_lm(
+            parallelproj.joseph3d_back_tof_lm(
                 xstart, xend, back_image, self.image_origin, self.voxel_size,
                 y_subset.astype(self.xp.float32),
                 self.tof_parameters.tofbin_width,

@@ -25,11 +25,9 @@ elif args.mode == 'CPU':
 else:
     raise ValueError
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+import parallelproj
 import pyparallelproj.coincidences as coincidences
-import pyparallelproj.wrapper as wrapper
 import pyparallelproj.subsets as subsets
 
 num_runs = args.num_runs
@@ -106,26 +104,26 @@ for io, sinogram_order in enumerate(sinogram_orders):
         for ir in range(num_runs + 1):
             # perform a complete fwd projection
             t0 = time.time()
-            wrapper.joseph3d_fwd(xstart,
-                                 xend,
-                                 img,
-                                 img_origin,
-                                 voxel_size,
-                                 img_fwd,
-                                 threadsperblock=threadsperblock)
+            parallelproj.joseph3d_fwd(xstart,
+                                      xend,
+                                      img,
+                                      img_origin,
+                                      voxel_size,
+                                      img_fwd,
+                                      threadsperblock=threadsperblock)
             t1 = time.time()
 
             # perform a complete backprojection
             back_img = xp.zeros(img.shape, dtype=xp.float32)
             ones = xp.ones(img_fwd.shape, dtype=xp.float32)
             t2 = time.time()
-            wrapper.joseph3d_back(xstart,
-                                  xend,
-                                  back_img,
-                                  img_origin,
-                                  voxel_size,
-                                  ones,
-                                  threadsperblock=threadsperblock)
+            parallelproj.joseph3d_back(xstart,
+                                       xend,
+                                       back_img,
+                                       img_origin,
+                                       voxel_size,
+                                       ones,
+                                       threadsperblock=threadsperblock)
             t3 = time.time()
             if ir > 0:
                 tmp = pd.DataFrame(

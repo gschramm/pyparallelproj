@@ -25,11 +25,9 @@ elif args.mode == 'CPU':
 else:
     raise ValueError
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+import parallelproj
 import pyparallelproj.coincidences as coincidences
-import pyparallelproj.wrapper as wrapper
 import pyparallelproj.tof as tof
 import pyparallelproj.subsets as subsets
 
@@ -109,7 +107,7 @@ for io, sinogram_order in enumerate(sinogram_orders):
         for ir in range(num_runs + 1):
             # perform a complete fwd projection
             t0 = time.time()
-            wrapper.joseph3d_fwd_tof_sino(
+            parallelproj.joseph3d_fwd_tof_sino(
                 xstart,
                 xend,
                 img,
@@ -128,7 +126,7 @@ for io, sinogram_order in enumerate(sinogram_orders):
             back_img = xp.zeros(img.shape, dtype=xp.float32)
             ones = xp.ones(img_fwd.shape, dtype=xp.float32)
             t2 = time.time()
-            wrapper.joseph3d_back_tof_sino(
+            parallelproj.joseph3d_back_tof_sino(
                 xstart,
                 xend,
                 back_img,

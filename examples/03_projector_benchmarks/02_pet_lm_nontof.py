@@ -29,11 +29,9 @@ elif args.mode == 'CPU':
 else:
     raise ValueError
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+import parallelproj
 import pyparallelproj.scanners as scanners
-import pyparallelproj.wrapper as wrapper
 
 num_runs = args.num_runs
 threadsperblock = args.threadsperblock
@@ -116,24 +114,24 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 
     for ir in range(num_runs + 1):
         t0 = time.time()
-        wrapper.joseph3d_fwd(xstart,
-                             xend,
-                             image,
-                             image_origin,
-                             voxel_size,
-                             image_fwd,
-                             threadsperblock=threadsperblock)
+        parallelproj.joseph3d_fwd(xstart,
+                                  xend,
+                                  image,
+                                  image_origin,
+                                  voxel_size,
+                                  image_fwd,
+                                  threadsperblock=threadsperblock)
         t1 = time.time()
 
         # peform a back projection
         t2 = time.time()
-        wrapper.joseph3d_back(xstart,
-                              xend,
-                              back_image,
-                              image_origin,
-                              voxel_size,
-                              y,
-                              threadsperblock=threadsperblock)
+        parallelproj.joseph3d_back(xstart,
+                                   xend,
+                                   back_image,
+                                   image_origin,
+                                   voxel_size,
+                                   y,
+                                   threadsperblock=threadsperblock)
         t3 = time.time()
         if ir > 0:
             tmp = pd.DataFrame(

@@ -211,6 +211,13 @@ end_mod = end_mod[event_index]
 end_ind = end_ind[event_index]
 tof_bins = tof_bins[event_index]
 
+if xp.__name__ == 'cupy':
+    start_mod = xp.array(start_mod)
+    start_ind = xp.asanyarray(start_ind)
+    end_mod = xp.asarray(end_mod)
+    end_ind = xp.asarray(end_ind)
+    tof_bins = xp.asarray(tof_bins)
+
 contamination_list = contamination_list[event_index]
 multiplicative_correction_list = multiplicative_correction_list[event_index]
 

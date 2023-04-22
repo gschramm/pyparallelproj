@@ -30,8 +30,8 @@ else:
     raise ValueError
 
 import pandas as pd
+import parallelproj
 import pyparallelproj.scanners as scanners
-import pyparallelproj.wrapper as wrapper
 import pyparallelproj.tof as tof
 
 num_runs = args.num_runs
@@ -119,39 +119,38 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 
     for ir in range(num_runs + 1):
         t0 = time.time()
-        wrapper.joseph3d_fwd_tof_lm(xstart,
-                                    xend,
-                                    image,
-                                    image_origin,
-                                    voxel_size,
-                                    image_fwd,
-                                    tof_parameters.tofbin_width,
-                                    xp.array([tof_parameters.sigma_tof],
+        parallelproj.joseph3d_fwd_tof_lm(xstart,
+                                         xend,
+                                         image,
+                                         image_origin,
+                                         voxel_size,
+                                         image_fwd,
+                                         tof_parameters.tofbin_width,
+                                         xp.array([tof_parameters.sigma_tof],
+                                                  dtype=xp.float32),
+                                         xp.array(
+                                             [tof_parameters.tofcenter_offset],
                                              dtype=xp.float32),
-                                    xp.array([tof_parameters.tofcenter_offset],
-                                             dtype=xp.float32),
-                                    tof_parameters.num_sigmas,
-                                    tofbin,
-                                    threadsperblock=threadsperblock)
+                                         tof_parameters.num_sigmas,
+                                         tofbin,
+                                         threadsperblock=threadsperblock)
         t1 = time.time()
 
         # perform a back projection
         t2 = time.time()
-        wrapper.joseph3d_back_tof_lm(xstart,
-                                     xend,
-                                     back_image,
-                                     image_origin,
-                                     voxel_size,
-                                     y,
-                                     tof_parameters.tofbin_width,
-                                     xp.array([tof_parameters.sigma_tof],
-                                              dtype=xp.float32),
-                                     xp.array(
-                                         [tof_parameters.tofcenter_offset],
-                                         dtype=xp.float32),
-                                     tof_parameters.num_sigmas,
-                                     tofbin,
-                                     threadsperblock=threadsperblock)
+        parallelproj.joseph3d_back_tof_lm(
+            xstart,
+            xend,
+            back_image,
+            image_origin,
+            voxel_size,
+            y,
+            tof_parameters.tofbin_width,
+            xp.array([tof_parameters.sigma_tof], dtype=xp.float32),
+            xp.array([tof_parameters.tofcenter_offset], dtype=xp.float32),
+            tof_parameters.num_sigmas,
+            tofbin,
+            threadsperblock=threadsperblock)
         t3 = time.time()
         if ir > 0:
             tmp = pd.DataFrame(

@@ -47,6 +47,7 @@ import pyparallelproj.coincidences as coincidences
 import pyparallelproj.tof as tof
 import pyparallelproj.petprojectors as petprojectors
 import pyparallelproj.resolution_models as resolution_models
+import pyparallelproj.listmode as lm
 import pyparallelproj.listmode_algorithms as lm_algorithms
 
 data_str = 'nema_tof_listmode'
@@ -131,7 +132,14 @@ if xp.__name__ == 'cupy':
     all_xtals = xp.asarray(all_xtals)
     all_multiplicative_factors = xp.asarray(all_multiplicative_factors)
 
-projector.events = all_xtals
+projector.events = lm.GenericPETListmodeEvents(
+    all_xtals[:, 0],
+    all_xtals[:, 1],
+    all_xtals[:, 2],
+    all_xtals[:, 3],
+    all_xtals[:, 2],  # hack for non-tof events
+    coincidence_descriptor.scanner,
+    precalculate_coords=True)
 projector.multiplicative_correction_list = all_multiplicative_factors
 
 t0 = time()
@@ -197,7 +205,14 @@ if presort:
     events = events[xp.argsort(events[:, 1] - events[:, 3]), :]
 
 # pass listmode events and multiplicative_correction_list to the projector
-projector.events = events
+projector.events = lm.GenericPETListmodeEvents(events[:, 0],
+                                               events[:, 1],
+                                               events[:, 2],
+                                               events[:, 3],
+                                               events[:, 4],
+                                               coincidence_descriptor.scanner,
+                                               precalculate_coords=True)
+
 projector.multiplicative_correction_list = multiplicative_correction_list
 
 #---------------------------------------------------------------------
