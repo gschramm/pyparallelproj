@@ -313,8 +313,6 @@ class Unet3D(torch.nn.Module):
 
 
 if __name__ == '__main__':
-    from torchviz import make_dot
-
     device = torch.device("cuda:0")
     dtype = torch.float32
 
@@ -327,7 +325,7 @@ if __name__ == '__main__':
         print(sum(p.numel() for p in model.parameters()))
         y = model(x)
 
-        make_dot(y,
-                 params=dict(model.named_parameters()),
-                 show_attrs=True,
-                 show_saved=True).render(f'test_{i}')
+        #make_dot(y,
+        #         params=dict(model.named_parameters()),
+        #         show_attrs=True,
+        #         show_saved=True).render(f'test_{i}')
