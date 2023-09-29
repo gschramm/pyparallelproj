@@ -1,0 +1,13 @@
+name: parallelproj-benchmark
+
+channels:
+  - conda-forge
+
+dependencies:
+  - parallelproj>=1.5
+  - pydantic>=1.10
+  - h5py
+  - pandas
+
+  # optional for GPU mode
+  # - cupy

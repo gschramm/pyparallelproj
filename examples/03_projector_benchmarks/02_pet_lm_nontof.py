@@ -114,20 +114,19 @@ for ia, symmetry_axis in enumerate(symmetry_axes):
 
     for ir in range(num_runs + 1):
         t0 = time.time()
-        parallelproj.joseph3d_fwd(xstart,
+        img_fwd = parallelproj.joseph3d_fwd(xstart,
                                   xend,
                                   image,
                                   image_origin,
                                   voxel_size,
-                                  image_fwd,
                                   threadsperblock=threadsperblock)
         t1 = time.time()
 
         # peform a back projection
         t2 = time.time()
-        parallelproj.joseph3d_back(xstart,
+        back_image = parallelproj.joseph3d_back(xstart,
                                    xend,
-                                   back_image,
+                                   image_shape,
                                    image_origin,
                                    voxel_size,
                                    y,
@@ -151,4 +150,5 @@ df['mode'] = args.mode
 df['num_events'] = num_events
 df['threadsperblock'] = threadsperblock
 
+Path(output_dir).mkdir(exist_ok=True, parents=True)
 df.to_csv(os.path.join(output_dir, output_file), index=False)
