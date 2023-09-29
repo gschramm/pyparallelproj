@@ -1,6 +1,7 @@
 import time
 import argparse
 import os
+from pathlib import Path
 import numpy as np
 
 parser = argparse.ArgumentParser()
@@ -104,12 +105,11 @@ for io, sinogram_order in enumerate(sinogram_orders):
         for ir in range(num_runs + 1):
             # perform a complete fwd projection
             t0 = time.time()
-            parallelproj.joseph3d_fwd(xstart,
+            img_fwd = parallelproj.joseph3d_fwd(xstart,
                                       xend,
                                       img,
                                       img_origin,
                                       voxel_size,
-                                      img_fwd,
                                       threadsperblock=threadsperblock)
             t1 = time.time()
 
@@ -117,9 +117,9 @@ for io, sinogram_order in enumerate(sinogram_orders):
             back_img = xp.zeros(img.shape, dtype=xp.float32)
             ones = xp.ones(img_fwd.shape, dtype=xp.float32)
             t2 = time.time()
-            parallelproj.joseph3d_back(xstart,
+            back_img = parallelproj.joseph3d_back(xstart,
                                        xend,
-                                       back_img,
+                                       img_shape,
                                        img_origin,
                                        voxel_size,
                                        ones,
@@ -150,4 +150,5 @@ df['mode'] = args.mode
 df['num_subsets'] = num_subsets
 df['threadsperblock'] = threadsperblock
 
+Path(output_dir).mkdir(exist_ok=True, parents=True)
 df.to_csv(os.path.join(output_dir, output_file), index=False)
