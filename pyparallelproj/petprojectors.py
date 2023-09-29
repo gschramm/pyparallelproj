@@ -251,17 +251,17 @@ class PETJosephProjector(PETProjector):
         if not self.tof:
             image_forward = self.xp.zeros(xstart.shape[0],
                                           dtype=self.xp.float32)
-            parallelproj.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
-                                      self.image_origin, self.voxel_size,
-                                      image_forward)
+            image_forward = parallelproj.joseph3d_fwd(
+                xstart, xend, x.astype(self.xp.float32), self.image_origin,
+                self.voxel_size)
         else:
             image_forward = self.xp.zeros(
                 (xstart.shape[0], self.tof_parameters.num_tofbins),
                 dtype=self.xp.float32)
-            parallelproj.joseph3d_fwd_tof_sino(
+
+            image_forward = parallelproj.joseph3d_fwd_tof_sino(
                 xstart, xend, x.astype(self.xp.float32), self.image_origin,
-                self.voxel_size, image_forward,
-                self.tof_parameters.tofbin_width,
+                self.voxel_size, self.tof_parameters.tofbin_width,
                 self.xp.array([self.tof_parameters.sigma_tof],
                               dtype=self.xp.float32),
                 self.xp.array([self.tof_parameters.tofcenter_offset],
@@ -285,13 +285,13 @@ class PETJosephProjector(PETProjector):
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
 
         if not self.tof:
-            parallelproj.joseph3d_back(xstart, xend, back_image,
-                                       self.image_origin, self.voxel_size,
-                                       y_subset.astype(self.xp.float32))
+            back_image = parallelproj.joseph3d_back(
+                xstart, xend, self.image_shape, self.image_origin,
+                self.voxel_size, y_subset.astype(self.xp.float32))
         else:
-            parallelproj.joseph3d_back_tof_sino(
-                xstart, xend, back_image, self.image_origin, self.voxel_size,
-                y_subset.astype(self.xp.float32),
+            back_image = parallelproj.joseph3d_back_tof_sino(
+                xstart, xend, self.image_shape, self.image_origin,
+                self.voxel_size, y_subset.astype(self.xp.float32),
                 self.tof_parameters.tofbin_width,
                 self.xp.array([self.tof_parameters.sigma_tof],
                               dtype=self.xp.float32),
@@ -312,17 +312,16 @@ class PETJosephProjector(PETProjector):
         image_forward = self.xp.zeros(xstart.shape[0], dtype=self.xp.float32)
 
         if not self.tof:
-            parallelproj.joseph3d_fwd(xstart, xend, x.astype(self.xp.float32),
-                                      self.image_origin, self.voxel_size,
-                                      image_forward)
+            image_forward = parallelproj.joseph3d_fwd(
+                xstart, xend, x.astype(self.xp.float32), self.image_origin,
+                self.voxel_size)
         else:
             tofbin = self.xp.ascontiguousarray(
                 self.events.get_event_tof_bins(subset_inds))
 
-            parallelproj.joseph3d_fwd_tof_lm(
+            image_forward = parallelproj.joseph3d_fwd_tof_lm(
                 xstart, xend, x.astype(self.xp.float32), self.image_origin,
-                self.voxel_size, image_forward,
-                self.tof_parameters.tofbin_width,
+                self.voxel_size, self.tof_parameters.tofbin_width,
                 self.xp.array([self.tof_parameters.sigma_tof],
                               dtype=self.xp.float32),
                 self.xp.array([self.tof_parameters.tofcenter_offset],
@@ -341,16 +340,16 @@ class PETJosephProjector(PETProjector):
         back_image = self.xp.zeros(self.image_shape, dtype=self.xp.float32)
 
         if not self.tof:
-            parallelproj.joseph3d_back(xstart, xend, back_image,
-                                       self.image_origin, self.voxel_size,
-                                       y_subset.astype(self.xp.float32))
+            back_image = parallelproj.joseph3d_back(
+                xstart, xend, self.image_shape, self.image_origin,
+                self.voxel_size, y_subset.astype(self.xp.float32))
         else:
             tofbin = self.xp.ascontiguousarray(
                 self.events.get_event_tof_bins(subset_inds))
 
-            parallelproj.joseph3d_back_tof_lm(
-                xstart, xend, back_image, self.image_origin, self.voxel_size,
-                y_subset.astype(self.xp.float32),
+            back_image = parallelproj.joseph3d_back_tof_lm(
+                xstart, xend, self.image_shape, self.image_origin,
+                self.voxel_size, y_subset.astype(self.xp.float32),
                 self.tof_parameters.tofbin_width,
                 self.xp.array([self.tof_parameters.sigma_tof],
                               dtype=self.xp.float32),
